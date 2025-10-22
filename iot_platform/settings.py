@@ -118,4 +118,31 @@ USE_TZ = True
 # Default primary key field type
 # ---------------------------------------------------------
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+# ================================================================
+# Licensing enforcement
+# ================================================================
+import os
+import requests
+from datetime import date
+
+LICENSE_KEY = os.getenv("LICENSE_KEY")
+LICENSE_END = os.getenv("LICENSE_END")
+LICENSE_SERVER_URL = os.getenv("LICENSE_SERVER_URL")
+
+try:
+    expiry = date.fromisoformat(LICENSE_END) if LICENSE_END else None
+    if expiry and expiry < date.today():
+        raise SystemExit("❌ License expired. Please contact support to renew.")
+
+    # Optional: verify remotely
+    if LICENSE_SERVER_URL and LICENSE_KEY:
+        try:
+            r = requests.get(LICENSE_SERVER_URL, params={"key": LICENSE_KEY, "customer": os.getenv("CUSTOMER_NAME")}, timeout=5)
+            if r.status_code != 200 or not r.json().get("valid", False):
+                raise SystemExit("❌ License verification failed. Contact admin.")
+        except Exception as e:
+            print(f"⚠️ License check warning: {e}")
+except Exception as e:
+    raise SystemExit(f"❌ Licensing error: {e}")
+
 
