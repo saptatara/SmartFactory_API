@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+<h2>Welcome, {{ customer.company_name }}</h2>
+
+<h3>Your Devices</h3>
+{% if devices %}
+  <ul>
+    {% for device in devices %}
+      <li>
+        <strong>{{ device.name }}</strong><br>
+        Location: {{ device.location }}<br>
+        Type: {{ device.device_type }}<br>
+        <a href="{% url 'device_detail_ui' device.id %}">View Details</a>
+      </li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <p>No devices found.</p>
+{% endif %}
+
+<h3>Recent Data</h3>
+{% if recent_data %}
+  <ul>
+    {% for reading in recent_data %}
+      <li>
+        {{ reading.device_name }} - {{ reading.sensor_label }}: {{ reading.value }} units
+        ({{ reading.timestamp|date:"M d, Y, h:i a" }})
+      </li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <p>No recent sensor data available.</p>
+{% endif %}
+
+<h3>Sensor Graphs</h3>
+{% if sensor_data_json %}
+  {% for sensor_label in sensor_data_json.keys %}
+    <div style="margin-bottom:40px;">
+      <h4>{{ sensor_label }}</h4>
+      <canvas id="chart-{{ sensor_label }}" height="200"></canvas>
+    </div>
+  {% endfor %}
+{% else %}
+  <p>No sensor data available to display charts.</p>
+{% endif %}
+
+<!-- JSON data for charts -->
+<script id="sensor-data-json" type="application/json">
+    {{ sensor_data_json|safe }}
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  const sensorData = JSON.parse(
+    document.getElementById("sensor-data-json").textContent
+  );
+
+  Object.keys(sensorData).forEach(label => {
+    const data = sensorData[label];
+    if (!data || data.length === 0) return;
+
+    const ctx = document.getElementById(`chart-${label}`).getContext("2d");
+
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: data.map(d => d.timestamp),
+        datasets: [{
+          label: label,
+          data: data.map(d => d.value),
+          borderColor: 'rgba(75, 192, 192, 1)',
+          backgroundColor: 'rgba(75, 192, 192, 0.2)',
+          fill: false,
+          tension: 0.1,
+          pointRadius: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: true } },
+        scales: {
+          x: { display: true, title: { display: true, text: 'Time' } },
+          y: { display: true, title: { display: true, text: 'Value' } }
+        }
+      }
+    });
+  });
+</script>
+{% endblock %}
+

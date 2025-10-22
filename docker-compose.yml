@@ -1,0 +1,36 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:14
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-heat_exchanger_db}
+      POSTGRES_USER: ${POSTGRES_USER:-heatuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-heatpass}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  web:
+    build:
+      context: .
+    restart: on-failure
+    volumes:
+      - .:/app   # mount local repo into container so created files appear on host
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    env_file:
+      - .env
+    environment:
+      DATABASE_HOST: db
+      DATABASE_PORT: 5432
+    command: gunicorn iot_platform.wsgi:application --bind 0.0.0.0:8000
+
+
+volumes:
+  pgdata:
+

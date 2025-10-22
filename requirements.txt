@@ -1,0 +1,13 @@
+Django>=4.2
+djangorestframework
+djangorestframework-simplejwt
+psycopg2-binary
+dj-database-url
+python-dotenv
+paho-mqtt
+celery[redis]
+redis
+sentry-sdk
+django-prometheus
+whitenoise
+gunicorn

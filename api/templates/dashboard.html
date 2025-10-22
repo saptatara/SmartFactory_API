@@ -1,0 +1,75 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Customer Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f4f6f8; padding: 20px; }
+        h1 { text-align: center; margin-bottom: 30px; color: #333; }
+        .device-card { background: #fff; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.08); margin-bottom: 20px; padding: 20px; transition: transform 0.2s; }
+        .device-card:hover { transform: translateY(-5px); }
+        .device-card h2 { margin-top: 0; color: #222; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 8px 12px; text-align: left; }
+        th { background: #007bff; color: white; text-transform: uppercase; }
+        tr:nth-child(even) { background: #f9f9f9; }
+        .sensor-value { font-weight: bold; }
+        .T { color: #e74c3c; }   /* Temperature */
+        .P { color: #3498db; }   /* Pressure */
+        .F { color: #27ae60; }   /* Flow */
+        .G { color: #8e44ad; }   /* Generic */
+    </style>
+</head>
+<body>
+    <h1>Customer Dashboard</h1>
+    <div id="dashboard"></div>
+
+    <script>
+        const dashboardUUID = "{{ dashboard_uuid }}";
+        const apiURL = `/api/dashboard/${dashboardUUID}/data/`;
+
+        async function fetchDashboard() {
+            try {
+                const response = await axios.get(apiURL);
+                const data = response.data;
+                const container = document.getElementById('dashboard');
+                container.innerHTML = '';
+
+                if (!data.devices || data.devices.length === 0) {
+                    container.innerHTML = '<p style="text-align:center;">No devices found for this customer.</p>';
+                    return;
+                }
+
+                data.devices.forEach(device => {
+                    const card = document.createElement('div');
+                    card.className = 'device-card';
+                    card.innerHTML = `<h2>${device.device_name} (ID: ${device.device_id})</h2>`;
+
+                    let tableHTML = '<table><tr><th>Sensor</th><th>Value</th><th>Last Updated</th></tr>';
+                    for (let label in device.sensors) {
+                        const sensor = device.sensors[label];
+                        const className = ['T','P','F'].includes(label[0]) ? label[0] : 'G';
+                        tableHTML += `<tr>
+                                        <td>${label}</td>
+                                        <td class="sensor-value ${className}">${sensor.value}</td>
+                                        <td>${new Date(sensor.created_at).toLocaleString()}</td>
+                                      </tr>`;
+                    }
+                    tableHTML += '</table>';
+                    card.innerHTML += tableHTML;
+                    container.appendChild(card);
+                });
+            } catch (err) {
+                console.error(err);
+                document.getElementById('dashboard').innerHTML = '<p style="color:red; text-align:center;">Failed to load dashboard. Check API endpoint.</p>';
+            }
+        }
+
+        fetchDashboard();
+        setInterval(fetchDashboard, 10000);
+    </script>
+</body>
+</html>
+
