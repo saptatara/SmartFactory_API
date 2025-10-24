@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+<h2>{{ device.name }} - Sensor Data</h2>
+
+{% if error %}
+  <p style="color:red">{{ error }}</p>
+{% endif %}
+
+<h3>Recent Data</h3>
+<ul>
+  {% for reading in sensor_readings %}
+    <li>
+      {{ reading.sensor_config.sensor_label }}: {{ reading.value }}
+      ({{ reading.created_at|date:"M d, Y, h:i a" }})
+    </li>
+  {% empty %}
+    <li>No recent data available.</li>
+  {% endfor %}
+</ul>
+
+<h3>Sensor Graphs</h3>
+{% if sensor_data %}
+  {% for sensor_label, readings in sensor_data.items %}
+    <div style="margin-bottom:40px;">
+      <h4>{{ sensor_label }}</h4>
+      <canvas id="chart-{{ forloop.counter }}"></canvas>
+      <script>
+        const ctx{{ forloop.counter }} = document.getElementById('chart-{{ forloop.counter }}').getContext('2d');
+        new Chart(ctx{{ forloop.counter }}, {
+          type: 'line',
+          data: {
+            labels: [{% for r in readings %}'{{ r.timestamp }}',{% endfor %}],
+            datasets: [{
+              label: '{{ sensor_label }}',
+              data: [{% for r in readings %}{{ r.value }},{% endfor %}],
+              fill: false,
+              borderColor: 'rgba(75, 192, 192, 1)',
+              tension: 0.1
+            }]
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              legend: { display: true }
+            },
+            scales: {
+              x: { display: true, title: { display: true, text: 'Time' } },
+              y: { display: true, title: { display: true, text: 'Value' } }
+            }
+          }
+        });
+      </script>
+    </div>
+  {% endfor %}
+{% else %}
+  <p>No sensor data available to plot.</p>
+{% endif %}
+{% endblock %}

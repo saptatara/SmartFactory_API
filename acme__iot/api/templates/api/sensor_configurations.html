@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+<h2>Sensor Configurations</h2>
+
+{% if configs %}
+<table border="1" cellpadding="8" cellspacing="0">
+    <thead>
+        <tr>
+            <th>Device Name</th>
+            <th>Sensor Label</th>
+            <th>Sensor Type</th>
+            <th>Unit</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for config in configs %}
+        <tr>
+            <td>{{ config.device.name }}</td>
+            <td>{{ config.sensor_label }}</td>
+            <td>{{ config.sensor_type.name }}</td>
+            <td>{{ config.sensor_type.unit }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>No sensor configurations found for your devices.</p>
+{% endif %}
+
+{% endblock %}
+
