@@ -102,6 +102,10 @@ Once the setup completes, open:
 ```
 Username: admin
 Password: SmartFactory@123
+Other URLs that get created are 
+Admin:   http://localhost:8010/admin/
+Login:   http://localhost:8010/accounts/login/
+API:     http://localhost:8010/api/
 ```
 
 ---
