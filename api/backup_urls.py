@@ -18,6 +18,8 @@ urlpatterns = [
     path('sensor_data/<int:device_id>/', views.get_sensor_data, name='get_sensor_data'),
 
     path('dashboard_data/<uuid:dashboard_uuid>/', views.customer_dashboard_data, name='customer_dashboard_data'),
+    # backward-compatible alias (old clients / frontend)
+    path("customer_dashboard_data/<uuid:dashboard_uuid>/",views.customer_dashboard_data,name="customer_dashboard_data_legacy"),
 
     path('api/dashboard/<uuid:dashboard_uuid>/data/', views.customer_devices_data, name='customer_devices_data'),
 

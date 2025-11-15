@@ -68,10 +68,10 @@ def customer_dashboard(request):
         "customer": customer, "devices": devices, "recent_data": recent_data
     })
 
-@login_required
-#@api_view(["GET"])
-#@authentication_classes([])
-#@permission_classes([])
+#@login_required
+@api_view(["GET"])
+@authentication_classes([])
+@permission_classes([])
 def customer_dashboard_uuid(request, dashboard_uuid):
     customer = get_object_or_404(Customer, dashboard_url=dashboard_uuid, user=request.user)
     devices = Device.objects.filter(customer=customer, is_active=True)

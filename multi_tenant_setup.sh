@@ -70,9 +70,30 @@ else
 fi
 
 # ---------------------------------------------------------------
-# Step 4: Create .env file
+# Step 4: Create .env file (auto-detect host IP and set ALLOWED_HOSTS)
 # ---------------------------------------------------------------
 ENV_FILE=".env.${CUSTOMER}"
+
+# Attempt to detect the host LAN IP (non-loopback)
+HOST_IP=""
+# Preferred method: ip route
+if command -v ip >/dev/null 2>&1; then
+  HOST_IP=$(ip route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if ($i=="src") {print $(i+1); exit}}' || true)
+fi
+
+# Fallback: parse ifconfig / ip addr
+if [ -z "${HOST_IP}" ]; then
+  if command -v ifconfig >/dev/null 2>&1; then
+    # macOS / BSD style output
+    HOST_IP=$(ifconfig 2>/dev/null | awk '/inet / && $2 != "127.0.0.1" {print $2; exit}' || true)
+  else
+    HOST_IP=$(ip addr 2>/dev/null | awk '/inet / && $2 !~ /127\\.0\\.0\\.1/ {split($2,a,"/"); print a[1]; exit}' || true)
+  fi
+fi
+
+# final fallback
+HOST_IP=${HOST_IP:-127.0.0.1}
+
 cat > "${ENV_FILE}" <<EOF
 # ===============================
 # Environment for ${CUSTOMER}
@@ -82,7 +103,9 @@ CUSTOMER_NAME=${CUSTOMER}
 # Django
 DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
 DJANGO_DEBUG=True
-DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1
+
+# IMPORTANT: provide ALLOWED_HOSTS (settings.py reads ALLOWED_HOSTS env var)
+ALLOWED_HOSTS=localhost,127.0.0.1,${HOST_IP}
 
 # Database
 POSTGRES_DB=${POSTGRES_DB}
@@ -100,8 +123,11 @@ LICENSE_START=${LICENSE_START}
 LICENSE_END=${LICENSE_END}
 LICENSE_SERVER_URL=https://license.smartfactory.com/verify
 EOF
+
+# Make a copy as .env for convenience (same behavior as before)
 cp "${ENV_FILE}" .env
-echo "✅ .env created for ${CUSTOMER} (valid until ${LICENSE_END})"
+
+echo "✅ .env created for ${CUSTOMER} (valid until ${LICENSE_END}) with HOST_IP=${HOST_IP}"
 
 # ---------------------------------------------------------------
 # Step 5: Build and start Docker
