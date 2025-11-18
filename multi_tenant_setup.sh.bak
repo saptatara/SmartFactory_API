@@ -3,12 +3,7 @@ set -euo pipefail
 
 # ================================================================
 # Multi-Tenant Setup Script for SmartFactory_API with Licensing
-# Author: Sameer Wadekar (updated)
-# Improvements:
-# - reliably finds repo root (uses git if available)
-# - writes tenant .env into both repo root (as .env.<customer>) and tenant dir
-# - creates tenant/.env for docker compose to use
-# - preserves existing features (random secrets, license generation, docker compose up, migrations, superuser creation)
+# Author: Sameer Wadekar
 # ================================================================
 
 # Usage:
@@ -26,34 +21,25 @@ CUSTOMER="$(echo "$CUSTOMER_RAW" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9_' 
 LICENSE_DAYS="${2:-30}"
 HTTP_PORT="${3:-8000}"
 
-# Determine repository root (prefer git top-level if available)
-if git rev-parse --show-toplevel >/dev/null 2>&1; then
-  BASE_DIR="$(git rev-parse --show-toplevel)"
-else
-  # fallback to current working directory (assume script run from repo root)
-  BASE_DIR="$(pwd)"
-fi
-
+BASE_DIR="$(pwd)"
 TEMPLATE_DIR="${BASE_DIR}"
 CUSTOMER_DIR="${BASE_DIR}/${CUSTOMER}_iot"
 
 echo "🚀 Creating new SmartFactory environment for '${CUSTOMER}' (Trial: ${LICENSE_DAYS} days) on port ${HTTP_PORT}"
-echo "Repository root: ${BASE_DIR}"
-echo "Template dir: ${TEMPLATE_DIR}"
-echo "Customer dir: ${CUSTOMER_DIR}"
 
 # ---------------------------------------------------------------
-# Step 1: Copy base project (if needed)
+# Step 1: Copy base project
 # ---------------------------------------------------------------
 if [ -d "${CUSTOMER_DIR}" ]; then
   echo "⚠️  ${CUSTOMER_DIR} already exists — verifying required files..."
   if [ ! -f "${CUSTOMER_DIR}/docker-compose.yml" ]; then
-    echo "📁 docker-compose.yml missing in tenant dir — copying essential files..."
+    echo "📁 docker-compose.yml missing — copying essential files..."
     rsync -a "${TEMPLATE_DIR}/docker-compose.yml" "${CUSTOMER_DIR}/"
     rsync -a "${TEMPLATE_DIR}/Dockerfile" "${CUSTOMER_DIR}/"
   fi
 else
-  echo "📁 Copying SmartFactory_API → ${CUSTOMER_DIR}"
+  
+echo "📁 Copying SmartFactory_API → ${CUSTOMER_DIR}"
   if command -v rsync >/dev/null 2>&1; then
     rsync -a --exclude 'venv' --exclude '.git' --exclude 'pgdata*' --exclude 'node_modules' "${TEMPLATE_DIR}/" "${CUSTOMER_DIR}/"
   else
@@ -62,8 +48,7 @@ else
   echo "✅ Copied base project to ${CUSTOMER_DIR}"
 fi
 
-# Ensure tenant dir exists before writing files
-mkdir -p "${CUSTOMER_DIR}"
+cd "${CUSTOMER_DIR}" || exit 1
 
 # ---------------------------------------------------------------
 # Step 2: Generate credentials
@@ -78,7 +63,6 @@ DJANGO_SECRET_KEY="$(openssl rand -hex 24)"
 # ---------------------------------------------------------------
 LICENSE_KEY="$(openssl rand -hex 16)"
 LICENSE_START="$(date '+%Y-%m-%d')"
-# date -v is mac specific; fall back to GNU date if necessary
 if date -v+"${LICENSE_DAYS}"d >/dev/null 2>&1; then
   LICENSE_END="$(date -v+"${LICENSE_DAYS}"d '+%Y-%m-%d')"
 else
@@ -86,14 +70,31 @@ else
 fi
 
 # ---------------------------------------------------------------
-# Step 4: Create .env files (both in repo root and tenant dir)
+# Step 4: Create .env file (auto-detect host IP and set ALLOWED_HOSTS)
 # ---------------------------------------------------------------
-ENV_FILENAME=".env.${CUSTOMER}"
-ENV_PATH_REPO="${BASE_DIR}/${ENV_FILENAME}"
-ENV_PATH_TENANT="${CUSTOMER_DIR}/${ENV_FILENAME}"
-ENV_PATH_TENANT_PLAIN="${CUSTOMER_DIR}/.env"
+ENV_FILE=".env.${CUSTOMER}"
 
-cat > "${ENV_PATH_REPO}" <<EOF
+# Attempt to detect the host LAN IP (non-loopback)
+HOST_IP=""
+# Preferred method: ip route
+if command -v ip >/dev/null 2>&1; then
+  HOST_IP=$(ip route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if ($i=="src") {print $(i+1); exit}}' || true)
+fi
+
+# Fallback: parse ifconfig / ip addr
+if [ -z "${HOST_IP}" ]; then
+  if command -v ifconfig >/dev/null 2>&1; then
+    # macOS / BSD style output
+    HOST_IP=$(ifconfig 2>/dev/null | awk '/inet / && $2 != "127.0.0.1" {print $2; exit}' || true)
+  else
+    HOST_IP=$(ip addr 2>/dev/null | awk '/inet / && $2 !~ /127\\.0\\.0\\.1/ {split($2,a,"/"); print a[1]; exit}' || true)
+  fi
+fi
+
+# final fallback
+HOST_IP=${HOST_IP:-127.0.0.1}
+
+cat > "${ENV_FILE}" <<EOF
 # ===============================
 # Environment for ${CUSTOMER}
 # ===============================
@@ -102,7 +103,9 @@ CUSTOMER_NAME=${CUSTOMER}
 # Django
 DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
 DJANGO_DEBUG=True
-DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1
+
+# IMPORTANT: provide ALLOWED_HOSTS (settings.py reads ALLOWED_HOSTS env var)
+ALLOWED_HOSTS=localhost,127.0.0.1,${HOST_IP}
 
 # Database
 POSTGRES_DB=${POSTGRES_DB}
@@ -121,45 +124,31 @@ LICENSE_END=${LICENSE_END}
 LICENSE_SERVER_URL=https://license.smartfactory.com/verify
 EOF
 
-# Copy the repo-level env into tenant dir so docker-compose inside tenant can use it
-cp -f "${ENV_PATH_REPO}" "${ENV_PATH_TENANT}"
-# Also create a plain .env inside tenant dir for convenience (do NOT overwrite repo root .env)
-cp -f "${ENV_PATH_TENANT}" "${ENV_PATH_TENANT_PLAIN}"
+# Make a copy as .env for convenience (same behavior as before)
+cp "${ENV_FILE}" .env
 
-echo "✅ Created env files:"
-echo "  - ${ENV_PATH_REPO}"
-echo "  - ${ENV_PATH_TENANT}"
-echo "  - ${ENV_PATH_TENANT_PLAIN}"
-
-# also make a local copy named .env in repo root only if none exists (do not override)
-if [ ! -f "${BASE_DIR}/.env" ]; then
-  cp -n "${ENV_PATH_REPO}" "${BASE_DIR}/.env" || true
-  echo "ℹ️  .env did not exist in repo root — copied ${ENV_FILENAME} to ${BASE_DIR}/.env"
-else
-  echo "ℹ️  .env already exists in repo root; not overwriting."
-fi
+echo "✅ .env created for ${CUSTOMER} (valid until ${LICENSE_END}) with HOST_IP=${HOST_IP}"
 
 # ---------------------------------------------------------------
-# Step 5: Build and start Docker for tenant
+# Step 5: Build and start Docker
 # ---------------------------------------------------------------
 PROJECT_NAME="${CUSTOMER}_iot"
-echo "🐳 Starting Docker environment for ${CUSTOMER} (project: ${PROJECT_NAME})..."
-docker compose --env-file "${ENV_PATH_TENANT}" -p "${PROJECT_NAME}" -f "${CUSTOMER_DIR}/docker-compose.yml" up -d --build
+echo "🐳 Starting Docker environment for ${CUSTOMER}..."
+docker compose --env-file "${CUSTOMER_DIR}/${ENV_FILE}" -p "${PROJECT_NAME}" -f "${CUSTOMER_DIR}/docker-compose.yml" up -d --build
 
 # ---------------------------------------------------------------
 # Step 6: Apply migrations & collect static files
 # ---------------------------------------------------------------
-echo "🛠  Running migrations..."
-docker compose --env-file "${ENV_PATH_TENANT}" -p "${PROJECT_NAME}" exec -T web python manage.py migrate --noinput
+echo "🛠 Running migrations..."
+docker compose --env-file "${ENV_FILE}" -p "${PROJECT_NAME}" exec -T web python manage.py migrate --noinput
 echo "📦 Collecting static files..."
-docker compose --env-file "${ENV_PATH_TENANT}" -p "${PROJECT_NAME}" exec -T web python manage.py collectstatic --noinput
-
+docker compose --env-file "${ENV_FILE}" -p "${PROJECT_NAME}" exec -T web python manage.py collectstatic --noinput
 # ---------------------------------------------------------------
 # Step 7: Create or Reset Default Superuser
 # ---------------------------------------------------------------
 echo "👤 Creating or updating default Django superuser..."
 
-docker compose --env-file "${ENV_PATH_TENANT}" -p "${PROJECT_NAME}" exec -T web \
+docker compose --env-file "${ENV_FILE}" -p "${PROJECT_NAME}" exec -T web \
   python manage.py shell <<EOF
 from django.contrib.auth import get_user_model
 User = get_user_model()
@@ -188,9 +177,12 @@ echo "🔑 License Key: ${LICENSE_KEY}"
 echo "📅 Valid From: ${LICENSE_START}  →  ${LICENSE_END}"
 echo "🌐 URL: http://localhost:${HTTP_PORT}"
 echo ""
-echo "To create an admin user manually:"
-echo "  docker compose --env-file ${ENV_PATH_TENANT} -p ${PROJECT_NAME} exec web python manage.py createsuperuser"
+echo "To create an admin user:"
+echo "  docker compose --env-file ${ENV_FILE} -p ${PROJECT_NAME} exec web python manage.py createsuperuser"
 echo ""
 echo "To stop this tenant:"
-echo "  docker compose --env-file ${ENV_PATH_TENANT} -p ${PROJECT_NAME} down"
+echo "  docker compose -p ${PROJECT_NAME} down -v"
+echo ""
+echo "To view logs:"
+echo "  docker compose --env-file ${ENV_FILE} -p ${PROJECT_NAME} logs -f"
 

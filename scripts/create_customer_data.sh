@@ -4,45 +4,71 @@ set -euo pipefail
 # Usage:
 #   ./scripts/create_customer_data.sh <customer_name> [device_name] [admin_password] [http_port]
 # Example:
-#   ./scripts/create_customer_data.sh acme NodeMCU13E-1 SmartFactory@123 8011
+#   ./scripts/create_customer_data.sh tesla NodeMCU13E-1 SmartFactory@123 8001
 
 if [ $# -lt 1 ]; then
   echo "Usage: $0 <customer_name> [device_name] [admin_password] [http_port]"
   exit 1
 fi
 
-# --- inputs / defaults ---
 RAW_CUSTOMER="$1"
 DEVICE_NAME="${2:-NodeMCU13E-1}"
 ADMIN_PASSWORD="${3:-SmartFactory@123}"
 HTTP_PORT="${4:-8000}"
 
-# sanitize customer -> lowercase alnum + underscore
 CUSTOMER="$(echo "$RAW_CUSTOMER" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9_]+/_/g')"
-PROJECT="${CUSTOMER}__iot"   # docker compose project name convention you use
+PROJECT="${CUSTOMER}__iot"
 
-echo "Creating / verifying customer data for: '$CUSTOMER'"
-echo "Project: $PROJECT"
-echo "Device: $DEVICE_NAME"
-echo "HTTP Port (for info): $HTTP_PORT"
-
-# ensure running from repo root where .env exists (or provide full path)
-if [ ! -f .env ]; then
-  echo "Warning: .env not found in current directory ($(pwd)). Make sure you're in the repo root or pass --env-file with docker compose calls."
+# Try to locate a sensible env-file to use:
+ENV_FILE=""
+# priority: .env.<customer>  -> .env (repo root) -> <customer>_iot/.env
+if [ -f ".env.${CUSTOMER}" ]; then
+  ENV_FILE=".env.${CUSTOMER}"
+elif [ -f ".env" ]; then
+  ENV_FILE=".env"
+elif [ -f "${CUSTOMER}_iot/.env" ]; then
+  ENV_FILE="${CUSTOMER}_iot/.env"
 fi
 
-# run Django shell inside the web container for the given project
-docker compose --env-file .env -p "${PROJECT}" exec -T web python manage.py shell <<PY
+if [ -z "$ENV_FILE" ]; then
+  echo "ERROR: Could not find a .env file. I looked for:"
+  echo "  - .env.${CUSTOMER}"
+  echo "  - .env"
+  echo "  - ${CUSTOMER}_iot/.env"
+  echo ""
+  echo "Please either:"
+  echo "  * run this script from the repo root where .env exists, or"
+  echo "  * create .env.${CUSTOMER} (or ${CUSTOMER}_iot/.env), or"
+  echo "  * pass an env file by editing the script."
+  exit 2
+fi
+
+echo "Using env file: $ENV_FILE"
+echo "Project: $PROJECT"
+echo "Device: $DEVICE_NAME"
+
+# Ensure the compose stack is running (start it if not)
+echo "Checking docker-compose services for project: $PROJECT ..."
+RUNNING_WEB="$(docker compose --env-file "$ENV_FILE" -p "${PROJECT}" ps --services --filter status=running | grep -x web || true)"
+if [ -z "$RUNNING_WEB" ]; then
+  echo "Web container not running for project ${PROJECT} — starting (this may take a moment)..."
+  docker compose --env-file "$ENV_FILE" -p "${PROJECT}" up -d --build
+  echo "Started compose stack for ${PROJECT}."
+else
+  echo "Web container is already running for project ${PROJECT}."
+fi
+
+# Run the Django creation block inside the tenant web container
+docker compose --env-file "$ENV_FILE" -p "${PROJECT}" exec -T web python manage.py shell <<PY
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from api.models import Customer, Device, SensorConfiguration, SensorType
-import sys
 
-USERNAME = "$CUSTOMER"
-PASSWORD = "$ADMIN_PASSWORD"
+USERNAME = "${CUSTOMER}"
+PASSWORD = "${ADMIN_PASSWORD}"
 EMAIL = f"admin@{USERNAME}.local"
-COMPANY_NAME = "$CUSTOMER"
-DEVICE_NAME = "$DEVICE_NAME"
+COMPANY_NAME = "${CUSTOMER}"
+DEVICE_NAME = "${DEVICE_NAME}"
 
 SENSOR_CONFIGS = [
     ("t1In", "Temperature", "°C"),
@@ -60,27 +86,22 @@ def safe_print(title, obj):
     print()
 
 with transaction.atomic():
-    # create or get user
     user, created = User.objects.get_or_create(username=USERNAME, defaults={"email": EMAIL})
     if created:
         user.set_password(PASSWORD)
         user.is_staff = True
-        user.is_superuser = False
         user.save()
         print(f"Created user '{USERNAME}' with password '{PASSWORD}'")
     else:
-        # Do not change password silently if user exists. Print message to change if required.
-        print(f"User '{USERNAME}' already exists. To reset password run: manage.py changepassword {USERNAME}")
+        print(f"User '{USERNAME}' exists. Use manage.py changepassword {USERNAME} to update password if needed.")
     safe_print("User", f"{user.username} (id={user.pk})")
 
-    # create or get Customer
     customer, c_created = Customer.objects.get_or_create(user=user, defaults={"company_name": COMPANY_NAME})
     if not c_created and customer.company_name != COMPANY_NAME:
         customer.company_name = COMPANY_NAME
         customer.save()
     safe_print("Customer", f"{customer.company_name} (id={customer.pk}) linked to user {user.username}")
 
-    # create or get Device
     device_defaults = {"is_active": True}
     device, d_created = Device.objects.get_or_create(name=DEVICE_NAME, customer=customer, defaults=device_defaults)
     if d_created:
@@ -88,27 +109,24 @@ with transaction.atomic():
     else:
         print(f"Device '{DEVICE_NAME}' already exists for customer '{customer.company_name}'")
 
-    # print device API keys if present
     wa = getattr(device, "write_api_key", None)
     ra = getattr(device, "read_api_key", None)
     safe_print("Device API keys", {"write_api_key": wa, "read_api_key": ra})
 
-    # create sensor types + configurations
     sensor_type_map = {}
     for label, type_name, unit in SENSOR_CONFIGS:
         st, st_created = SensorType.objects.get_or_create(name=type_name, defaults={"unit": unit})
+        sensor_type_map[type_name] = st
         if st_created:
             print(f"Created SensorType '{type_name}' (unit={unit})")
-        sensor_type_map[type_name] = st
 
     created_cfgs = []
     for sensor_label, type_name, unit in SENSOR_CONFIGS:
         st = sensor_type_map[type_name]
-        defaults = {"sensor_type": st}
         cfg, cfg_created = SensorConfiguration.objects.get_or_create(
             device=device,
             sensor_label=sensor_label,
-            defaults=defaults
+            defaults={"sensor_type": st}
         )
         if cfg_created:
             created_cfgs.append(sensor_label)
@@ -125,6 +143,7 @@ with transaction.atomic():
     print("===================")
 PY
 
-echo "Done. If you need to reset the admin password for user '$CUSTOMER' run:"
-echo "  docker compose --env-file .env -p ${PROJECT} exec -T web python manage.py changepassword ${CUSTOMER}"
+echo "Done for customer: $CUSTOMER (project: $PROJECT)."
+echo "If you want to inspect logs run:"
+echo "  docker compose --env-file \"$ENV_FILE\" -p \"$PROJECT\" logs --tail 200 web"
 
