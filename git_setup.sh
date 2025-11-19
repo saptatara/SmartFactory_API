@@ -6,7 +6,7 @@ echo "=== Git Repository Setup Script ==="
 # Your credentials
 USERNAME="saptatara"
 EMAIL="saptatara@users.gmail.com"  # You can change this to your actual email
-TOKEN="***REMOVED***"
+TOKEN="YOUR_GITHUB_TOKEN_HERE"
 REMOTE_URL="https://github.com/saptatara/SmartFactory_API.git"
 
 # Function to print colored output
