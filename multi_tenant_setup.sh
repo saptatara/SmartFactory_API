@@ -3,18 +3,20 @@ set -euo pipefail
 
 # ================================================================
 # Multi-Tenant Setup Script for SmartFactory_API with Licensing
-# Author: Sameer Wadekar (updated)
-# Improvements:
-# - reliably finds repo root (uses git if available)
-# - writes tenant .env into both repo root (as .env.<customer>) and tenant dir
-# - creates tenant/.env for docker compose to use
-# - preserves existing features (random secrets, license generation, docker compose up, migrations, superuser creation)
+# (Updated: preserves all original features + auto-detect public IP and
+#  include it in DJANGO_ALLOWED_HOSTS so you can reach the admin from the VM's public IP)
 # ================================================================
-
+#
 # Usage:
 #   ./multi_tenant_setup.sh <customer_name> [license_days] [http_port]
 # Example:
 #   ./multi_tenant_setup.sh acme 30 8001
+#
+# Notes:
+#  - The script will write .env.<customer> into repo root and into <customer>_iot/
+#  - It will also create <customer>_iot/.env used by docker compose for that tenant
+#  - It will not overwrite an existing repo-level .env file
+# ================================================================
 
 if [ $# -lt 1 ]; then
   echo "Usage: $0 <customer_name> [license_days] [http_port]"
@@ -30,7 +32,6 @@ HTTP_PORT="${3:-8000}"
 if git rev-parse --show-toplevel >/dev/null 2>&1; then
   BASE_DIR="$(git rev-parse --show-toplevel)"
 else
-  # fallback to current working directory (assume script run from repo root)
   BASE_DIR="$(pwd)"
 fi
 
@@ -62,7 +63,6 @@ else
   echo "✅ Copied base project to ${CUSTOMER_DIR}"
 fi
 
-# Ensure tenant dir exists before writing files
 mkdir -p "${CUSTOMER_DIR}"
 
 # ---------------------------------------------------------------
@@ -78,7 +78,6 @@ DJANGO_SECRET_KEY="$(openssl rand -hex 24)"
 # ---------------------------------------------------------------
 LICENSE_KEY="$(openssl rand -hex 16)"
 LICENSE_START="$(date '+%Y-%m-%d')"
-# date -v is mac specific; fall back to GNU date if necessary
 if date -v+"${LICENSE_DAYS}"d >/dev/null 2>&1; then
   LICENSE_END="$(date -v+"${LICENSE_DAYS}"d '+%Y-%m-%d')"
 else
@@ -86,7 +85,41 @@ else
 fi
 
 # ---------------------------------------------------------------
-# Step 4: Create .env files (both in repo root and tenant dir)
+# Step 4: Detect public IP and compose ALLOWED_HOSTS
+# ---------------------------------------------------------------
+# Try several methods to detect the VM's public IP. Prefer HTTP queries, fallback to local host detection.
+PUBLIC_IP=""
+# try common external services (if instance has outbound internet)
+if command -v curl >/dev/null 2>&1; then
+  PUBLIC_IP="$(curl -s ifconfig.me || true)"
+  if [ -z "${PUBLIC_IP}" ]; then
+    PUBLIC_IP="$(curl -s icanhazip.com || true)"
+  fi
+fi
+# fallback using dig or host (rare)
+if [ -z "${PUBLIC_IP}" ] && command -v dig >/dev/null 2>&1; then
+  PUBLIC_IP="$(dig +short myip.opendns.com @resolver1.opendns.com || true)"
+fi
+# fallback to hostname -I (useful for private IPs)
+if [ -z "${PUBLIC_IP}" ] && command -v hostname >/dev/null 2>&1; then
+  # hostname -I works on many linux systems; take first entry
+  PUBLIC_IP="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
+fi
+
+# final fallback: empty (we will still include localhost/127.0.0.1)
+if [ -n "${PUBLIC_IP}" ]; then
+  # strip whitespace
+  PUBLIC_IP="$(echo "${PUBLIC_IP}" | tr -d '[:space:]')"
+  DJANGO_ALLOWED_HOSTS_VAL="localhost,127.0.0.1,${PUBLIC_IP}"
+else
+  DJANGO_ALLOWED_HOSTS_VAL="localhost,127.0.0.1"
+fi
+
+echo "Detected public IP (may be blank if detection failed): '${PUBLIC_IP}'"
+echo "Will write DJANGO_ALLOWED_HOSTS='${DJANGO_ALLOWED_HOSTS_VAL}' into tenant .env"
+
+# ---------------------------------------------------------------
+# Step 5: Create .env files (both in repo root and tenant dir)
 # ---------------------------------------------------------------
 ENV_FILENAME=".env.${CUSTOMER}"
 ENV_PATH_REPO="${BASE_DIR}/${ENV_FILENAME}"
@@ -102,7 +135,7 @@ CUSTOMER_NAME=${CUSTOMER}
 # Django
 DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
 DJANGO_DEBUG=True
-DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1
+DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS_VAL}
 
 # Database
 POSTGRES_DB=${POSTGRES_DB}
@@ -121,9 +154,8 @@ LICENSE_END=${LICENSE_END}
 LICENSE_SERVER_URL=https://license.smartfactory.com/verify
 EOF
 
-# Copy the repo-level env into tenant dir so docker-compose inside tenant can use it
+# copy into tenant dir and create plain .env
 cp -f "${ENV_PATH_REPO}" "${ENV_PATH_TENANT}"
-# Also create a plain .env inside tenant dir for convenience (do NOT overwrite repo root .env)
 cp -f "${ENV_PATH_TENANT}" "${ENV_PATH_TENANT_PLAIN}"
 
 echo "✅ Created env files:"
@@ -131,7 +163,7 @@ echo "  - ${ENV_PATH_REPO}"
 echo "  - ${ENV_PATH_TENANT}"
 echo "  - ${ENV_PATH_TENANT_PLAIN}"
 
-# also make a local copy named .env in repo root only if none exists (do not override)
+# copy into repo root .env only if not present (do not overwrite existing .env)
 if [ ! -f "${BASE_DIR}/.env" ]; then
   cp -n "${ENV_PATH_REPO}" "${BASE_DIR}/.env" || true
   echo "ℹ️  .env did not exist in repo root — copied ${ENV_FILENAME} to ${BASE_DIR}/.env"
@@ -140,14 +172,14 @@ else
 fi
 
 # ---------------------------------------------------------------
-# Step 5: Build and start Docker for tenant
+# Step 6: Build and start Docker for tenant
 # ---------------------------------------------------------------
 PROJECT_NAME="${CUSTOMER}_iot"
 echo "🐳 Starting Docker environment for ${CUSTOMER} (project: ${PROJECT_NAME})..."
 docker compose --env-file "${ENV_PATH_TENANT}" -p "${PROJECT_NAME}" -f "${CUSTOMER_DIR}/docker-compose.yml" up -d --build
 
 # ---------------------------------------------------------------
-# Step 6: Apply migrations & collect static files
+# Step 7: Apply migrations & collect static files
 # ---------------------------------------------------------------
 echo "🛠  Running migrations..."
 docker compose --env-file "${ENV_PATH_TENANT}" -p "${PROJECT_NAME}" exec -T web python manage.py migrate --noinput
@@ -155,7 +187,7 @@ echo "📦 Collecting static files..."
 docker compose --env-file "${ENV_PATH_TENANT}" -p "${PROJECT_NAME}" exec -T web python manage.py collectstatic --noinput
 
 # ---------------------------------------------------------------
-# Step 7: Create or Reset Default Superuser
+# Step 8: Create or Reset Default Superuser
 # ---------------------------------------------------------------
 echo "👤 Creating or updating default Django superuser..."
 
@@ -181,16 +213,21 @@ else:
 EOF
 
 # ---------------------------------------------------------------
-# Step 8: Summary
+# Step 9: Summary & next steps
 # ---------------------------------------------------------------
 echo "✅ ${CUSTOMER} environment is ready!"
 echo "🔑 License Key: ${LICENSE_KEY}"
 echo "📅 Valid From: ${LICENSE_START}  →  ${LICENSE_END}"
-echo "🌐 URL: http://localhost:${HTTP_PORT}"
+echo "🌐 URL: http://localhost:${HTTP_PORT} (or http://<PUBLIC_IP>:${HTTP_PORT} if your cloud firewall/security-group permits traffic)"
 echo ""
-echo "To create an admin user manually:"
-echo "  docker compose --env-file ${ENV_PATH_TENANT} -p ${PROJECT_NAME} exec web python manage.py createsuperuser"
+echo "DJANGO_ALLOWED_HOSTS written into ${ENV_PATH_TENANT}:"
+sed -n '1,120p' "${ENV_PATH_TENANT}" | grep -i DJANGO_ALLOWED_HOSTS || true
+echo ""
+echo "If you need to reach via public IP, ensure the cloud VM security group / firewall allows inbound TCP on port ${HTTP_PORT}."
+echo ""
+echo "To inspect logs if anything failed:"
+echo "  docker compose --env-file \"${ENV_PATH_TENANT}\" -p \"${PROJECT_NAME}\" logs --tail 200 web"
 echo ""
 echo "To stop this tenant:"
-echo "  docker compose --env-file ${ENV_PATH_TENANT} -p ${PROJECT_NAME} down"
+echo "  docker compose --env-file \"${ENV_PATH_TENANT}\" -p \"${PROJECT_NAME}\" down"
 
