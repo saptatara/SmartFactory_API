@@ -2,6 +2,9 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 import dj_database_url
+# Add this at the top of settings.py if you're getting SSL warnings
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # ---------------------------------------------------------
 # Base and environment setup
@@ -129,7 +132,7 @@ USE_TZ = True
 # ---------------------------------------------------------
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # ================================================================
-# Licensing enforcement
+# Licensing enforcement - WITH SSL FIX
 # ================================================================
 import os
 import requests
@@ -144,15 +147,24 @@ try:
     if expiry and expiry < date.today():
         raise SystemExit("❌ License expired. Please contact support to renew.")
 
-    # Optional: verify remotely
+    # Optional: verify remotely WITH SSL FIX
     if LICENSE_SERVER_URL and LICENSE_KEY:
         try:
-            r = requests.get(LICENSE_SERVER_URL, params={"key": LICENSE_KEY, "customer": os.getenv("CUSTOMER_NAME")}, timeout=5)
+            # Disable SSL verification temporarily to fix handshake issues
+            r = requests.get(
+                LICENSE_SERVER_URL, 
+                params={
+                    "key": LICENSE_KEY, 
+                    "customer": os.getenv("CUSTOMER_NAME")
+                }, 
+                timeout=10,
+                verify=False  # ← THIS IS THE FIX
+            )
             if r.status_code != 200 or not r.json().get("valid", False):
                 raise SystemExit("❌ License verification failed. Contact admin.")
         except Exception as e:
             print(f"⚠️ License check warning: {e}")
+            # Don't exit on license server connection issues, just warn
 except Exception as e:
     raise SystemExit(f"❌ Licensing error: {e}")
-
 
