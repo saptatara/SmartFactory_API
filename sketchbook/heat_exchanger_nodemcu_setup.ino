@@ -5,16 +5,16 @@
 #include <SPI.h>
 
 // WiFi credentials
-//const char* ssid = "Airtel_9309924679_5G";
-//const char* password = "archsam801";
+const char* ssid = "Airtel_9309924679_5G";
+const char* password = "archsam801";
 
-const char* ssid = "zerolosssystems";
-const char* password = "123456789";
+//const char* ssid = "zerolosssystems";
+//const char* password = "123456789";
 
 // Django API details
-const char* host = "13.234.189.6";  // Your server IP
+const char* host = "150.241.244.250";  // Your server IP
 const int port = 8001;                 // Django server port
-String writeApiKey = "373f5529-67d6-4731-bda3-a3cdd160491c";  // Platex device write key
+String writeApiKey = "f9cec3cb-f793-4345-aa9e-1f8284ce38f9";  // Platex device write key
 String deviceId = "1";                 // Platex device ID
 
 // DS18B20 Sensor Setup
@@ -58,6 +58,16 @@ int numberOfTempSensors;
 DeviceAddress tempSensorAddress[4];
 String tempSensorLabels[4] = {"T1In", "T1Out", "T2In", "T2Out"};
 bool tempSensorConnected[4] = {false, false, false, false};
+
+// Function prototypes
+void testDjangoConnection();
+void sendToDjangoAPI(float t1, float t2, float t3, float t4, float pressure);
+void initializeADS1220();
+void detectDPTSensor();
+float readDPTSensor();
+int32_t readADS1220();
+void writeRegister(uint8_t reg, uint8_t value);
+void printAllReadings(float t1, float t2, float t3, float t4, float pressure);
 
 void setup() {
   Serial.begin(115200);
@@ -114,6 +124,42 @@ void setup() {
   Serial.println("\nWiFi connected!");
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
+  
+  // Test Django connection
+  testDjangoConnection();
+}
+
+void testDjangoConnection() {
+  Serial.println("🧪 Testing Django connection...");
+  
+  WiFiClient client;
+  if (client.connect(host, port)) {
+    Serial.println("✅ Django server is reachable");
+    
+    // Send a simple test request - FIXED STRING CONCATENATION
+    String testRequest = String("GET /health/ HTTP/1.1\r\n") +
+                        "Host: " + String(host) + "\r\n" +
+                        "Connection: close\r\n\r\n";
+    
+    client.print(testRequest);
+    
+    // Read response
+    unsigned long timeout = millis();
+    while (client.connected() && millis() - timeout < 5000) {
+      if (client.available()) {
+        String line = client.readStringUntil('\n');
+        Serial.println("Test response: " + line);
+      }
+    }
+    client.stop();
+  } else {
+    Serial.println("❌ Django server is NOT reachable");
+    Serial.println("Please check:");
+    Serial.println("1. Server IP: " + String(host));
+    Serial.println("2. Port: " + String(port));
+    Serial.println("3. Django is running: docker ps");
+    Serial.println("4. Firewall allows port " + String(port));
+  }
 }
 
 void loop() {
@@ -271,12 +317,32 @@ void printAllReadings(float t1, float t2, float t3, float t4, float pressure) {
 
 void sendToDjangoAPI(float t1, float t2, float t3, float t4, float pressure) {
   WiFiClient client;
-
+  
+  Serial.println("🔌 Attempting to connect to Django server...");
+  Serial.print("Host: "); Serial.print(host); Serial.print(":"); Serial.println(port);
+  
+  // Test connection with timeout
+  unsigned long connectTimeout = 10000; // 10 seconds
+  unsigned long connectStart = millis();
+  
   if (!client.connect(host, port)) {
-    Serial.println("Connection to Django failed");
+    Serial.println("❌ Connection to Django failed - server unreachable");
+    Serial.println("Possible reasons:");
+    Serial.println("1. Django server is down");
+    Serial.println("2. Network connectivity issue");
+    Serial.println("3. Wrong IP/port");
+    Serial.println("4. Firewall blocking connection");
+    
+    // Check WiFi status
+    Serial.print("WiFi status: ");
+    Serial.println(WiFi.status());
+    Serial.print("RSSI: ");
+    Serial.println(WiFi.RSSI());
     return;
   }
-
+  
+  Serial.println("✅ Connected to Django server!");
+  
   String jsonData = "{";
   
   // Temperature data
@@ -291,24 +357,51 @@ void sendToDjangoAPI(float t1, float t2, float t3, float t4, float pressure) {
 
   String request = "POST /api/write_data/" + deviceId + "/ HTTP/1.1\r\n" +
                    "Host: " + String(host) + "\r\n" +
-                   "Authorization: Token " + writeApiKey + "\r\n" +
+                   "Authorization: Bearer " + writeApiKey + "\r\n" +  // ← CHANGED "Token" to "Bearer"
                    "Content-Type: application/json\r\n" +
                    "Connection: close\r\n" +
                    "Content-Length: " + String(jsonData.length()) + "\r\n\r\n" +
                    jsonData;
 
+  Serial.println("📤 Sending request to Django...");
   client.print(request);
-
+  
   Serial.println("Sent to Django:");
   Serial.println(jsonData);
+  Serial.println("API Key: " + writeApiKey);
 
-  while (client.connected()) {
-    String line = client.readStringUntil('\n');
-    if (line == "\r") break;
+  // Wait for response with timeout
+  unsigned long responseTimeout = 10000; // 10 seconds
+  unsigned long responseStart = millis();
+  bool headersReceived = false;
+  String response = "";
+
+  while (client.connected() && millis() - responseStart < responseTimeout) {
+    if (client.available()) {
+      String line = client.readStringUntil('\n');
+      
+      if (!headersReceived) {
+        Serial.println("Header: " + line);
+        if (line == "\r") {
+          headersReceived = true;
+          Serial.println("=== Response Body ===");
+        }
+      } else {
+        response += line + "\n";
+        Serial.println("Body: " + line);
+      }
+    }
+    
+    // Small delay to allow data to arrive
+    delay(10);
   }
 
-  String response = client.readString();
-  Serial.println("Response: " + response);
+  if (response.length() > 0) {
+    Serial.println("✅ Full Response: " + response);
+  } else {
+    Serial.println("❌ No response received (timeout)");
+  }
+  
   client.stop();
+  Serial.println("Connection closed.");
 }
-
