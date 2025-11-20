@@ -37,6 +37,4 @@ CMD ["gunicorn", "iot_platform.wsgi:application", "--bind", "0.0.0.0:8000"]
 # In your Dockerfile, ensure you have:
 RUN apt-get update && apt-get install -y ca-certificates && update-ca-certificates
 
-# Or for Alpine-based images:
-RUN apk add --no-cache ca-certificates && update-ca-certificates
 
