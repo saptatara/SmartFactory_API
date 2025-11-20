@@ -65,7 +65,8 @@ class DeviceSerializer(serializers.ModelSerializer):
             })
 
         for label in grouped:
-            grouped[label].sort(key=lambda x: x["timestamp"])
+            #grouped[label].sort(key=lambda x: x["timestamp"])
+            grouped[label] = grouped[label][::-1]
         return grouped
 
 

@@ -29,7 +29,8 @@ def latest_chronological(queryset, n):
     the slice so the returned list goes from oldest to newest, which is
     ideal for plotting on a time-series x-axis.
     """
-    return list(queryset.order_by("-created_at")[:n])[::-1]
+    #return list(queryset.order_by("-created_at")[:n])[::-1]
+    return list(queryset.order_by("-created_at")[:n])
 
 
 # ==================== AUTH ====================
@@ -180,13 +181,13 @@ def customer_dashboard_data(request, dashboard_uuid):
                 "value": r.value,
             })
         # readings already chronological; keep sort to be defensive
-        for label in sensor_data:
-            sensor_data[label].sort(key=lambda x: x["timestamp"])
-        dashboard_data.append({
-            "device_id": device.id,
-            "device_name": device.name,
-            "sensor_data": sensor_data,
-        })
+        #for label in sensor_data:
+        #    sensor_data[label].sort(key=lambda x: x["timestamp"])
+        #dashboard_data.append({
+        #    "device_id": device.id,
+        #    "device_name": device.name,
+        #    "sensor_data": sensor_data,
+        #})
 
     return Response({
         "customer": customer.company_name,
