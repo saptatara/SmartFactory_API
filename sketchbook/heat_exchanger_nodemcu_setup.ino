@@ -14,8 +14,8 @@ const char* password = "archsam801";
 // Django API details
 const char* host = "150.241.244.250";  // Your server IP
 const int port = 8001;                 // Django server port
-String writeApiKey = "f9cec3cb-f793-4345-aa9e-1f8284ce38f9";  // Platex device write key
-String deviceId = "1";                 // Platex device ID
+String writeApiKey = "8e93b017-fd20-4bd1-bcaf-2e18a47456d4";  // Platex device write key
+String deviceId = "2";                 // Platex device ID
 
 // DS18B20 Sensor Setup
 #define ONE_WIRE_BUS D4
@@ -179,7 +179,7 @@ void loop() {
   // Send data to Django API
   sendToDjangoAPI(t1, t2, t3, t4, pressure);
 
-  delay(30000); // Send data every 30 seconds
+  delay(60000); // Send data every 60 seconds
 }
 
 void initializeADS1220() {
@@ -357,7 +357,7 @@ void sendToDjangoAPI(float t1, float t2, float t3, float t4, float pressure) {
 
   String request = "POST /api/write_data/" + deviceId + "/ HTTP/1.1\r\n" +
                    "Host: " + String(host) + "\r\n" +
-                   "Authorization: Bearer " + writeApiKey + "\r\n" +  // ← CHANGED "Token" to "Bearer"
+                   "Authorization: Token " + writeApiKey + "\r\n" +  // ← FIXED: Use "Token" not "Bearer"
                    "Content-Type: application/json\r\n" +
                    "Connection: close\r\n" +
                    "Content-Length: " + String(jsonData.length()) + "\r\n\r\n" +

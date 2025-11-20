@@ -4,7 +4,7 @@ set -euo pipefail
 # Usage:
 #   ./scripts/create_customer_data.sh <customer_name> [device_name] [admin_password] [http_port]
 # Example:
-#   ./scripts/create_customer_data.sh tesla NodeMCU13E-1 SmartFactory@123 8001
+#   ./scripts/create_customer_data.sh platex NodeMCU13E-1 SmartFactory@123 8001
 
 if [ $# -lt 1 ]; then
   echo "Usage: $0 <customer_name> [device_name] [admin_password] [http_port]"
@@ -62,20 +62,21 @@ fi
 docker compose --env-file "$ENV_FILE" -p "${PROJECT}" exec -T web python manage.py shell <<PY
 from django.contrib.auth import get_user_model
 from django.db import transaction
-from api.models import Customer, Device, SensorConfiguration, SensorType
+from api.models import Customer, Device, SensorConfiguration, SensorType, FoulingData
+import uuid
 
 USERNAME = "${CUSTOMER}"
 PASSWORD = "${ADMIN_PASSWORD}"
 EMAIL = f"admin@{USERNAME}.local"
-COMPANY_NAME = "${CUSTOMER}"
+COMPANY_NAME = "${RAW_CUSTOMER}"  # Use the original name with proper casing
 DEVICE_NAME = "${DEVICE_NAME}"
 
 SENSOR_CONFIGS = [
-    ("t1In", "Temperature", "°C"),
-    ("t2In", "Temperature", "°C"),
-    ("t1Out", "Temperature", "°C"),
-    ("t2Out", "Temperature", "°C"),
-    ("Deltap", "Pressure", "bar"),
+    ("t1_in", "Temperature", "°C"),
+    ("t1_out", "Temperature", "°C"), 
+    ("t2_in", "Temperature", "°C"),
+    ("t2_out", "Temperature", "°C"),
+    ("dpt1", "Pressure", "bar"),
 ]
 
 User = get_user_model()
@@ -86,28 +87,54 @@ def safe_print(title, obj):
     print()
 
 with transaction.atomic():
+    # Check if we should delete the sample device first
+    sample_device = Device.objects.filter(name='Heat Exchanger Unit #1').first()
+    if sample_device:
+        print("Found sample device 'Heat Exchanger Unit #1' - removing it...")
+        sample_device.delete()
+        print("Sample device removed")
+
     user, created = User.objects.get_or_create(username=USERNAME, defaults={"email": EMAIL})
     if created:
         user.set_password(PASSWORD)
         user.is_staff = True
+        user.is_superuser = True
         user.save()
-        print(f"Created user '{USERNAME}' with password '{PASSWORD}'")
+        print(f"✅ Created user '{USERNAME}' with password '{PASSWORD}'")
     else:
-        print(f"User '{USERNAME}' exists. Use manage.py changepassword {USERNAME} to update password if needed.")
+        print(f"ℹ️  User '{USERNAME}' exists. Updating password...")
+        user.set_password(PASSWORD)
+        user.is_staff = True
+        user.is_superuser = True
+        user.save()
     safe_print("User", f"{user.username} (id={user.pk})")
 
-    customer, c_created = Customer.objects.get_or_create(user=user, defaults={"company_name": COMPANY_NAME})
+    customer, c_created = Customer.objects.get_or_create(
+        user=user, 
+        defaults={
+            "company_name": COMPANY_NAME,
+            "contact_email": EMAIL,
+            "dashboard_url": uuid.uuid4()
+        }
+    )
     if not c_created and customer.company_name != COMPANY_NAME:
         customer.company_name = COMPANY_NAME
         customer.save()
     safe_print("Customer", f"{customer.company_name} (id={customer.pk}) linked to user {user.username}")
 
-    device_defaults = {"is_active": True}
-    device, d_created = Device.objects.get_or_create(name=DEVICE_NAME, customer=customer, defaults=device_defaults)
-    if d_created:
-        print(f"Created Device '{DEVICE_NAME}' for customer '{customer.company_name}'")
-    else:
-        print(f"Device '{DEVICE_NAME}' already exists for customer '{customer.company_name}'")
+    # Delete any existing device with the same name to avoid duplicates
+    existing_devices = Device.objects.filter(name=DEVICE_NAME, customer=customer)
+    if existing_devices.exists():
+        print(f"Removing existing device '{DEVICE_NAME}'...")
+        existing_devices.delete()
+
+    device = Device.objects.create(
+        name=DEVICE_NAME, 
+        customer=customer, 
+        is_active=True,
+        location="Main Production Line"
+    )
+    print(f"✅ Created Device '{DEVICE_NAME}' for customer '{customer.company_name}'")
 
     wa = getattr(device, "write_api_key", None)
     ra = getattr(device, "read_api_key", None)
@@ -130,20 +157,52 @@ with transaction.atomic():
         )
         if cfg_created:
             created_cfgs.append(sensor_label)
-            print(f"Created SensorConfiguration: {sensor_label} (type={type_name})")
+            print(f"✅ Created SensorConfiguration: {sensor_label} (type={type_name})")
         else:
-            print(f"SensorConfiguration exists: {sensor_label} (type={getattr(cfg.sensor_type,'name',None)})")
+            print(f"ℹ️  SensorConfiguration exists: {sensor_label}")
 
-    print("\\n===== SUMMARY =====")
+    # Create sample fouling data for the device
+    fouling_data, fd_created = FoulingData.objects.get_or_create(
+        device=device,
+        defaults={
+            'fouling_factor': 0.00015,
+            'u_actual': 650.0,
+            'u_clean': 800.0,
+            'performance_ratio': 0.81,
+            'heat_duty': 150000.0,
+            'lmtd': 28.5,
+            'severity': 'Minor Fouling',
+            'recommendation': 'Monitor closely, consider routine cleaning during next maintenance',
+            'risk_level': 'Low'
+        }
+    )
+    
+    if fd_created:
+        print("✅ Created sample fouling data for device")
+
+    print("\\n" + "="*50)
+    print("🎯 SETUP COMPLETE - READY FOR ARDUINO DATA")
+    print("="*50)
     print("User:", user.username)
-    print("Customer:", customer.company_name, "id=", customer.pk)
-    print("Device:", device.name, "id=", device.pk)
-    print("API keys: write=", wa, " read=", ra)
-    print("Sensor configurations created/checked:", ", ".join(created_cfgs) if created_cfgs else "none newly created")
-    print("===================")
+    print("Password:", PASSWORD)
+    print("Customer:", customer.company_name, "(id:", customer.pk, ")")
+    print("Device:", device.name, "(id:", device.pk, ")")
+    print("Write API Key:", wa)
+    print("Read API Key:", ra)
+    print("Sensor Configurations:", ", ".join(created_cfgs))
+    print("")
+    print("📝 Arduino Configuration:")
+    print("   Device ID:", device.pk)
+    print("   Write API Key:", wa)
+    print("   Server:", "150.241.244.250:${HTTP_PORT}")
+    print("")
+    print("🔗 Dashboard URL: http://150.241.244.250:${HTTP_PORT}/api/ui/dashboard/")
+    print("="*50)
 PY
 
-echo "Done for customer: $CUSTOMER (project: $PROJECT)."
-echo "If you want to inspect logs run:"
+echo "✅ Setup completed for customer: $RAW_CUSTOMER"
+echo "📊 Dashboard: http://150.241.244.250:$HTTP_PORT/api/ui/dashboard/"
+echo "🔑 Login with: $CUSTOMER / $ADMIN_PASSWORD"
+echo ""
+echo "To monitor logs:"
 echo "  docker compose --env-file \"$ENV_FILE\" -p \"$PROJECT\" logs --tail 200 web"
-
