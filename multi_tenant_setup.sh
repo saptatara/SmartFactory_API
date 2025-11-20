@@ -84,38 +84,11 @@ else
 fi
 
 # ---------------------------------------------------------------
-# Step 4: Detect public IP and compose ALLOWED_HOSTS
+# Step 4: Set ALLOWED_HOSTS to wildcard (*) for all hosts
 # ---------------------------------------------------------------
-# Try several methods to detect the VM's public IP. Prefer HTTP queries, fallback to local host detection.
-PUBLIC_IP=""
-# try common external services (if instance has outbound internet)
-if command -v curl >/dev/null 2>&1; then
-  PUBLIC_IP="$(curl -s ifconfig.me || true)"
-  if [ -z "${PUBLIC_IP}" ]; then
-    PUBLIC_IP="$(curl -s icanhazip.com || true)"
-  fi
-fi
-# fallback using dig or host (rare)
-if [ -z "${PUBLIC_IP}" ] && command -v dig >/dev/null 2>&1; then
-  PUBLIC_IP="$(dig +short myip.opendns.com @resolver1.opendns.com || true)"
-fi
-# fallback to hostname -I (useful for private IPs)
-if [ -z "${PUBLIC_IP}" ] && command -v hostname >/dev/null 2>&1; then
-  # hostname -I works on many linux systems; take first entry
-  PUBLIC_IP="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
-fi
+DJANGO_ALLOWED_HOSTS_VAL="*"
 
-# final fallback: empty (we will still include localhost/127.0.0.1)
-if [ -n "${PUBLIC_IP}" ]; then
-  # strip whitespace
-  PUBLIC_IP="$(echo "${PUBLIC_IP}" | tr -d '[:space:]')"
-  DJANGO_ALLOWED_HOSTS_VAL="localhost,127.0.0.1,${PUBLIC_IP}"
-else
-  DJANGO_ALLOWED_HOSTS_VAL="localhost,127.0.0.1"
-fi
-
-echo "Detected public IP (may be blank if detection failed): '${PUBLIC_IP}'"
-echo "Will write DJANGO_ALLOWED_HOSTS='${DJANGO_ALLOWED_HOSTS_VAL}' into tenant .env"
+echo "🌐 Setting DJANGO_ALLOWED_HOSTS='${DJANGO_ALLOWED_HOSTS_VAL}' to allow all hosts"
 
 # ---------------------------------------------------------------
 # Step 5: Create .env files (both in repo root and tenant dir)
