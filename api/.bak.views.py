@@ -2,7 +2,6 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import authenticate, login, logout
-from django.utils import timezone
 from rest_framework.decorators import (
     api_view, permission_classes, authentication_classes
 )
@@ -25,21 +24,13 @@ from collections import defaultdict
 def latest_chronological(queryset, n):
     """
     Return the latest `n` records from `queryset` ordered oldest -> newest.
+
+    This selects the newest N records (by ordering -created_at) then reverses
+    the slice so the returned list goes from oldest to newest, which is
+    ideal for plotting on a time-series x-axis.
     """
     return list(queryset.order_by("-created_at")[:n])[::-1]
-
-def format_ist_timestamp(dt):
-    """
-    Convert datetime to IST timezone and format as string
-    """
-    # Activate IST timezone
-    ist = timezone.get_fixed_timezone(330)  # IST is UTC+5:30 (330 minutes)
-    if timezone.is_aware(dt):
-        ist_time = dt.astimezone(ist)
-    else:
-        ist_time = timezone.make_aware(dt, timezone=ist)
-    
-    return ist_time.strftime("%Y-%m-%d %H:%M:%S")
+    #return list(queryset.order_by("-created_at")[:n])
 
 
 # ==================== AUTH ====================
@@ -79,6 +70,9 @@ def customer_dashboard(request):
     })
 
 @login_required
+#@api_view(["GET"])
+#@authentication_classes([])
+#@permission_classes([])
 def customer_dashboard_uuid(request, dashboard_uuid):
     customer = get_object_or_404(Customer, dashboard_url=dashboard_uuid, user=request.user)
     devices = Device.objects.filter(customer=customer, is_active=True)
@@ -94,10 +88,8 @@ def device_detail(request, device_id):
 
     sensor_data = defaultdict(list)
     for r in sensor_readings:
-        # Convert to IST timezone
-        ist_timestamp = format_ist_timestamp(r.created_at)
         sensor_data[r.sensor_config.sensor_label].append({
-            "timestamp": ist_timestamp,  # Use IST timestamp
+            "timestamp": r.created_at.strftime("%Y-%m-%d %H:%M:%S"),
             "value": r.value,
         })
 
@@ -166,7 +158,7 @@ def write_data(request, device_id):
 
     return Response([
         {"id": d.id, "device": d.device.id, "sensor_label": d.sensor_config.sensor_label,
-         "value": d.value, "created_at": format_ist_timestamp(d.created_at)}  # Use IST timestamp
+         "value": d.value, "created_at": d.created_at.isoformat()}
         for d in created_data
     ], status=201 if created_data else 400)
 
@@ -184,18 +176,18 @@ def customer_dashboard_data(request, dashboard_uuid):
         readings = latest_chronological(SensorData.objects.filter(device=device), 200)
         sensor_data = defaultdict(list)
         for r in readings:
-            # Convert to IST timezone
-            ist_timestamp = format_ist_timestamp(r.created_at)
             sensor_data[r.sensor_config.sensor_label].append({
-                "timestamp": ist_timestamp,  # Use IST timestamp
+                "timestamp": r.created_at.strftime("%Y-%m-%d %H:%M:%S"),
                 "value": r.value,
             })
-        
-        dashboard_data.append({
-            "device_id": device.id,
-            "device_name": device.name,
-            "sensor_data": sensor_data,
-        })
+        # readings already chronological; keep sort to be defensive
+        #for label in sensor_data:
+        #    sensor_data[label].sort(key=lambda x: x["timestamp"])
+        #dashboard_data.append({
+        #    "device_id": device.id,
+        #    "device_name": device.name,
+        #    "sensor_data": sensor_data,
+        #})
 
     return Response({
         "customer": customer.company_name,
@@ -222,12 +214,8 @@ def get_sensor_data(request, device_id):
     sensor_data = defaultdict(list)
     # Return in chronological order for clients
     for r in latest_chronological(SensorData.objects.filter(device=device), 1000):
-        # Convert to IST timezone
-        ist_timestamp = format_ist_timestamp(r.created_at)
         sensor_data[r.sensor_config.sensor_label].append({
-            "id": r.id, 
-            "value": r.value, 
-            "created_at": ist_timestamp  # Use IST timestamp
+            "id": r.id, "value": r.value, "created_at": r.created_at.isoformat()
         })
     return Response(sensor_data)
 
@@ -259,12 +247,12 @@ def device_detail_api(request, device_id):
         readings = latest_chronological(SensorData.objects.filter(device=device), 200)
         sensor_data = defaultdict(list)
         for r in readings:
-            # Convert to IST timezone
-            ist_timestamp = format_ist_timestamp(r.created_at)
             sensor_data[r.sensor_config.sensor_label].append({
-                "timestamp": ist_timestamp,  # Use IST timestamp
+                "timestamp": r.created_at.strftime("%Y-%m-%d %H:%M:%S"),
                 "value": r.value,
             })
+        for label in sensor_data:
+            sensor_data[label].sort(key=lambda x: x["timestamp"])
         return Response({"device": serializer.data, "sensor_data": sensor_data})
     elif request.method == "PUT":
         serializer = DeviceSerializer(device, data=request.data, partial=True)
@@ -336,6 +324,7 @@ def iot_data_list(request):
     return Response(serializer.data)
 
 
+
 from django.http import JsonResponse
 from .models import Device, SensorData
 
@@ -349,20 +338,12 @@ def customer_devices_data(request, dashboard_uuid):
         data = []
         for device in devices:
             latest_data = SensorData.objects.filter(device=device).order_by('-created_at').first()
-            if latest_data:
-                # Convert to IST timezone
-                ist_timestamp = format_ist_timestamp(latest_data.created_at)
-                data.append({
-                    'device_name': device.name,
-                    'latest_value': latest_data.value,
-                    'timestamp': ist_timestamp,  # Use IST timestamp
-                })
-            else:
-                data.append({
-                    'device_name': device.name,
-                    'latest_value': None,
-                    'timestamp': None,
-                })
+            data.append({
+                'device_name': device.name,
+                'latest_value': latest_data.value if latest_data else None,
+                'timestamp': latest_data.created_at if latest_data else None,
+            })
         return JsonResponse({'devices': data})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+

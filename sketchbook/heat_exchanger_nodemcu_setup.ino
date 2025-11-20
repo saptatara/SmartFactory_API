@@ -13,7 +13,7 @@ const char* password = "123456789";
 
 // Django API details
 const char* host = "13.234.189.6";  // Your server IP
-const int port = 8010;                 // Django server port
+const int port = 8001;                 // Django server port
 String writeApiKey = "373f5529-67d6-4731-bda3-a3cdd160491c";  // Platex device write key
 String deviceId = "1";                 // Platex device ID
 

@@ -1,5 +1,6 @@
 # api/serializers.py
 from rest_framework import serializers
+from django.utils import timezone
 from .models import (
     Customer, Device, DeviceType,
     SensorData, SensorConfiguration, SensorType, IoTData
@@ -31,16 +32,23 @@ class SensorConfigurationSerializer(serializers.ModelSerializer):
         model = SensorConfiguration
         fields = ["id", "sensor_label", "sensor_type", "expected_min", "expected_max"]
 
-
 class SensorDataSerializer(serializers.ModelSerializer):
     sensor_label = serializers.CharField(source="sensor_config.sensor_label", read_only=True)
     unit = serializers.CharField(source="sensor_config.sensor_type.unit", read_only=True)
-    timestamp = serializers.DateTimeField(source="created_at", format="%Y-%m-%d %H:%M:%S")
+    timestamp = serializers.SerializerMethodField()
 
     class Meta:
         model = SensorData
         fields = ["id", "value", "timestamp", "sensor_label", "unit"]
 
+    def get_timestamp(self, obj):
+        # Convert to IST timezone
+        ist = timezone.get_fixed_timezone(330)  # IST is UTC+5:30
+        if timezone.is_aware(obj.created_at):
+            ist_time = obj.created_at.astimezone(ist)
+        else:
+            ist_time = timezone.make_aware(obj.created_at, timezone=ist)
+        return ist_time.strftime("%Y-%m-%d %H:%M:%S")
 
 class DeviceSerializer(serializers.ModelSerializer):
     sensor_data = serializers.SerializerMethodField()
