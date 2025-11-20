@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+
+{% block title %}Fouling Monitoring - {{ device.name }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h2>🔍 Fouling Monitoring - {{ device.name }}</h2>
+        <p class="text-muted">Device: {{ device.name }} | Location: {{ device.location }}</p>
+        
+        <div class="alert alert-info">
+            <h5>About Fouling Factor</h5>
+            <p>Fouling factor indicates the thermal resistance caused by deposits on heat transfer surfaces. 
+            Higher values indicate more severe fouling and reduced heat transfer efficiency.</p>
+        </div>
+        
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Fouling Factor Trend</h5>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="foulingChart" height="100"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Current Status</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="currentStatus">
+                            <p>Loading current fouling status...</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h5>Quick Calculator</h5>
+                    </div>
+                    <div class="card-body">
+                        <p>Calculate fouling factor for this device:</p>
+                        <a href="{% url 'fouling_calculator' %}" class="btn btn-primary btn-sm">
+                            Open Calculator
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5>Historical Fouling Data</h5>
+            </div>
+            <div class="card-body">
+                <div id="historicalData">
+                    <p>Loading historical data...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// Initialize chart
+const ctx = document.getElementById('foulingChart').getContext('2d');
+const foulingChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+        labels: [],
+        datasets: [{
+            label: 'Fouling Factor (m²·K/W)',
+            data: [],
+            borderColor: '#007bff',
+            backgroundColor: 'rgba(0, 123, 255, 0.1)',
+            tension: 0.4,
+            fill: true
+        }]
+    },
+    options: {
+        responsive: true,
+        scales: {
+            y: {
+                beginAtZero: true,
+                title: {
+                    display: true,
+                    text: 'Fouling Factor (m²·K/W)'
+                }
+            },
+            x: {
+                title: {
+                    display: true,
+                    text: 'Date'
+                }
+            }
+        }
+    }
+});
+
+// Load initial data
+loadFoulingData();
+
+function loadFoulingData() {
+    // Simulate loading data - replace with actual API calls
+    setTimeout(() => {
+        // Sample data
+        const sampleData = {
+            labels: ['2024-01', '2024-02', '2024-03', '2024-04', '2024-05', '2024-06'],
+            data: [0.00005, 0.00008, 0.00012, 0.00015, 0.00018, 0.00015],
+            current: {
+                fouling_factor: 0.00015,
+                severity: "Minor Fouling",
+                recommendation: "Monitor closely, consider routine cleaning",
+                color_code: "blue",
+                performance_ratio: 0.85
+            }
+        };
+        
+        // Update chart
+        foulingChart.data.labels = sampleData.labels;
+        foulingChart.data.datasets[0].data = sampleData.data;
+        foulingChart.update();
+        
+        // Update current status
+        updateCurrentStatus(sampleData.current);
+        
+        // Update historical data
+        updateHistoricalData(sampleData);
+    }, 1000);
+}
+
+function updateCurrentStatus(data) {
+    const statusDiv = document.getElementById('currentStatus');
+    const severityClass = `alert alert-${data.color_code}`;
+    
+    statusDiv.innerHTML = `
+        <div class="${severityClass}">
+            <h6>${data.severity}</h6>
+            <p><strong>Fouling Factor:</strong> ${data.fouling_factor.toExponential(4)} m²·K/W</p>
+            <p><strong>Performance:</strong> ${(data.performance_ratio * 100).toFixed(1)}%</p>
+            <p><strong>Action:</strong> ${data.recommendation}</p>
+        </div>
+    `;
+}
+
+function updateHistoricalData(data) {
+    const historicalDiv = document.getElementById('historicalData');
+    
+    let tableHTML = `
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Fouling Factor</th>
+                    <th>Severity</th>
+                    <th>Performance</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    
+    data.labels.forEach((label, index) => {
+        const ff = data.data[index];
+        const severity = getSeverityFromFF(ff);
+        const performance = Math.max(0, 1 - (ff / 0.002)) * 100; // Simplified calculation
+        
+        tableHTML += `
+            <tr>
+                <td>${label}</td>
+                <td>${ff.toExponential(4)}</td>
+                <td><span class="badge bg-${getColorFromSeverity(severity)}">${severity}</span></td>
+                <td>${performance.toFixed(1)}%</td>
+            </tr>
+        `;
+    });
+    
+    tableHTML += `</tbody></table>`;
+    historicalDiv.innerHTML = tableHTML;
+}
+
+function getSeverityFromFF(foulingFactor) {
+    const ff_cm2 = foulingFactor * 10000;
+    if (ff_cm2 < 0.0001) return 'No Fouling';
+    if (ff_cm2 < 0.0005) return 'Minor Fouling';
+    if (ff_cm2 < 0.001) return 'Moderate Fouling';
+    if (ff_cm2 < 0.002) return 'Severe Fouling';
+    return 'Critical Fouling';
+}
+
+function getColorFromSeverity(severity) {
+    const colorMap = {
+        'No Fouling': 'success',
+        'Minor Fouling': 'info',
+        'Moderate Fouling': 'warning',
+        'Severe Fouling': 'orange',
+        'Critical Fouling': 'danger'
+    };
+    return colorMap[severity] || 'secondary';
+}
+</script>
+{% endblock %}

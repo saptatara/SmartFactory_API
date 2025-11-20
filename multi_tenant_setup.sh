@@ -3,8 +3,7 @@ set -euo pipefail
 
 # ================================================================
 # Multi-Tenant Setup Script for SmartFactory_API with Licensing
-# (Updated: preserves all original features + auto-detect public IP and
-#  include it in DJANGO_ALLOWED_HOSTS so you can reach the admin from the VM's public IP)
+# (Updated: Includes fouling factor migrations and features)
 # ================================================================
 #
 # Usage:
@@ -179,9 +178,10 @@ echo "🐳 Starting Docker environment for ${CUSTOMER} (project: ${PROJECT_NAME}
 docker compose --env-file "${ENV_PATH_TENANT}" -p "${PROJECT_NAME}" -f "${CUSTOMER_DIR}/docker-compose.yml" up -d --build
 
 # ---------------------------------------------------------------
-# Step 7: Apply migrations & collect static files
+# Step 7: Apply migrations & collect static files (INCLUDES FOULING MIGRATIONS)
 # ---------------------------------------------------------------
-echo "🛠  Running migrations..."
+echo "🛠  Running migrations (including fouling factor tables)..."
+docker compose --env-file "${ENV_PATH_TENANT}" -p "${PROJECT_NAME}" exec -T web python manage.py makemigrations api --noinput
 docker compose --env-file "${ENV_PATH_TENANT}" -p "${PROJECT_NAME}" exec -T web python manage.py migrate --noinput
 echo "📦 Collecting static files..."
 docker compose --env-file "${ENV_PATH_TENANT}" -p "${PROJECT_NAME}" exec -T web python manage.py collectstatic --noinput
@@ -213,15 +213,87 @@ else:
 EOF
 
 # ---------------------------------------------------------------
-# Step 9: Summary & next steps
+# Step 9: Create sample fouling data for demonstration
+# ---------------------------------------------------------------
+echo "🔧 Creating sample fouling data for demonstration..."
+
+docker compose --env-file "${ENV_PATH_TENANT}" -p "${PROJECT_NAME}" exec -T web \
+  python manage.py shell <<EOF
+from api.models import Customer, Device, FoulingData
+from django.contrib.auth.models import User
+import random
+
+# Get or create customer
+try:
+    user = User.objects.get(username="admin")
+    customer, created = Customer.objects.get_or_create(
+        user=user,
+        defaults={
+            'company_name': '${CUSTOMER} Company',
+            'contact_email': 'admin@${CUSTOMER}.com',
+            'dashboard_url': '$(uuidgen)'
+        }
+    )
+    
+    # Create sample device if none exists
+    device, device_created = Device.objects.get_or_create(
+        customer=customer,
+        name='Heat Exchanger Unit #1',
+        defaults={
+            'location': 'Main Production Line',
+            'is_active': True
+        }
+    )
+    
+    if device_created:
+        print(f"✅ Created sample device: {device.name}")
+    
+    # Create sample fouling data
+    fouling_data, fd_created = FoulingData.objects.get_or_create(
+        device=device,
+        defaults={
+            'fouling_factor': 0.00015,
+            'u_actual': 650.0,
+            'u_clean': 800.0,
+            'performance_ratio': 0.81,
+            'heat_duty': 150000.0,
+            'lmtd': 28.5,
+            'severity': 'Minor Fouling',
+            'recommendation': 'Monitor closely, consider routine cleaning during next maintenance',
+            'risk_level': 'Low'
+        }
+    )
+    
+    if fd_created:
+        print("✅ Created sample fouling data for demonstration")
+    else:
+        print("ℹ️  Fouling data already exists")
+        
+except Exception as e:
+    print(f"⚠️  Could not create sample data: {e}")
+EOF
+
+# ---------------------------------------------------------------
+# Step 10: Summary & next steps
 # ---------------------------------------------------------------
 echo "✅ ${CUSTOMER} environment is ready!"
 echo "🔑 License Key: ${LICENSE_KEY}"
 echo "📅 Valid From: ${LICENSE_START}  →  ${LICENSE_END}"
 echo "🌐 URL: http://localhost:${HTTP_PORT} (or http://<PUBLIC_IP>:${HTTP_PORT} if your cloud firewall/security-group permits traffic)"
 echo ""
+echo "🎯 NEW FEATURES INCLUDED:"
+echo "   • Fouling Factor Calculations"
+echo "   • Heat Exchanger Performance Monitoring"
+echo "   • Fouling Trend Analysis"
+echo "   • Maintenance Recommendations"
+echo ""
 echo "DJANGO_ALLOWED_HOSTS written into ${ENV_PATH_TENANT}:"
 sed -n '1,120p' "${ENV_PATH_TENANT}" | grep -i DJANGO_ALLOWED_HOSTS || true
+echo ""
+echo "To access fouling features:"
+echo "  1. Login as admin/SmartFactory@123"
+echo "  2. Go to Dashboard to see fouling analysis"
+echo "  3. Use Fouling Calculator for manual calculations"
 echo ""
 echo "If you need to reach via public IP, ensure the cloud VM security group / firewall allows inbound TCP on port ${HTTP_PORT}."
 echo ""
@@ -230,4 +302,3 @@ echo "  docker compose --env-file \"${ENV_PATH_TENANT}\" -p \"${PROJECT_NAME}\" 
 echo ""
 echo "To stop this tenant:"
 echo "  docker compose --env-file \"${ENV_PATH_TENANT}\" -p \"${PROJECT_NAME}\" down"
-

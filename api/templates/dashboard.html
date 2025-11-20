@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <title>Customer Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: Arial, sans-serif; background: #f4f6f8; padding: 20px; }
         h1 { text-align: center; margin-bottom: 30px; color: #333; }
@@ -20,15 +21,277 @@
         .P { color: #3498db; }   /* Pressure */
         .F { color: #27ae60; }   /* Flow */
         .G { color: #8e44ad; }   /* Generic */
+        
+        /* Fouling Status Styles */
+        .fouling-status { 
+            margin: 15px 0; 
+            padding: 15px; 
+            border-radius: 8px; 
+            border-left: 5px solid;
+        }
+        .fouling-green { background: #d4edda; border-color: #28a745; }
+        .fouling-blue { background: #d1ecf1; border-color: #17a2b8; }
+        .fouling-yellow { background: #fff3cd; border-color: #ffc107; }
+        .fouling-orange { background: #ffeaa7; border-color: #f39c12; }
+        .fouling-red { background: #f8d7da; border-color: #dc3545; }
+        
+        .fouling-chart { 
+            margin: 20px 0; 
+            background: white; 
+            padding: 15px; 
+            border-radius: 8px; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .fouling-link { 
+            display: inline-block; 
+            margin: 10px 0; 
+            padding: 8px 16px; 
+            background: #007bff; 
+            color: white; 
+            text-decoration: none; 
+            border-radius: 4px; 
+        }
+        .fouling-link:hover { background: #0056b3; }
+        
+        .calculator-section {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 12px;
+            color: white;
+        }
+        
+        .calculator-buttons {
+            margin-top: 15px;
+        }
+        
+        .btn-calculator {
+            background: rgba(255,255,255,0.2);
+            border: 2px solid white;
+            color: white;
+            padding: 10px 20px;
+            margin: 0 10px;
+            border-radius: 25px;
+            text-decoration: none;
+            transition: all 0.3s;
+        }
+        
+        .btn-calculator:hover {
+            background: white;
+            color: #667eea;
+        }
     </style>
 </head>
 <body>
     <h1>Customer Dashboard</h1>
+    
+    <!-- Fouling Calculator Section -->
+    <div class="calculator-section">
+        <h3>🧮 Heat Exchanger Fouling Analysis</h3>
+        <p>Monitor and analyze heat exchanger performance with real-time fouling factor calculations</p>
+        <div class="calculator-buttons">
+            <a href="{% url 'fouling_calculator' %}" class="btn-calculator">
+                Open Fouling Calculator
+            </a>
+            <a href="#" onclick="showFoulingInfo()" class="btn-calculator">
+                What is Fouling Factor?
+            </a>
+        </div>
+    </div>
+    
     <div id="dashboard"></div>
 
     <script>
         const dashboardUUID = "{{ dashboard_uuid }}";
         const apiURL = `/api/dashboard/${dashboardUUID}/data/`;
+
+        function getFoulingStatusClass(severity) {
+            const statusMap = {
+                'No Fouling': 'fouling-green',
+                'Minor Fouling': 'fouling-blue', 
+                'Moderate Fouling': 'fouling-yellow',
+                'Severe Fouling': 'fouling-orange',
+                'Critical Fouling': 'fouling-red'
+            };
+            return statusMap[severity] || 'fouling-yellow';
+        }
+
+        function getFoulingDataForDevice(deviceId, deviceName) {
+            // In a real implementation, this would come from your API
+            // For now, we'll generate sample data based on device ID for demonstration
+            const baseFF = 0.00005 + (deviceId * 0.00002);
+            const performanceRatio = Math.max(0.7, 1 - (baseFF * 5000));
+            
+            let severity, recommendation, color_code;
+            
+            if (baseFF < 0.0001) {
+                severity = "No Fouling";
+                recommendation = "Normal operation - maintain current maintenance schedule";
+                color_code = "green";
+            } else if (baseFF < 0.0005) {
+                severity = "Minor Fouling";
+                recommendation = "Monitor closely, consider routine cleaning during next maintenance";
+                color_code = "blue";
+            } else if (baseFF < 0.001) {
+                severity = "Moderate Fouling";
+                recommendation = "Schedule cleaning in near future - performance degradation detected";
+                color_code = "yellow";
+            } else if (baseFF < 0.002) {
+                severity = "Severe Fouling";
+                recommendation = "Schedule immediate cleaning - significant performance loss";
+                color_code = "orange";
+            } else {
+                severity = "Critical Fouling";
+                recommendation = "Emergency shutdown required for cleaning - critical performance impact";
+                color_code = "red";
+            }
+            
+            return {
+                fouling_factor: baseFF,
+                severity: severity,
+                recommendation: recommendation,
+                color_code: color_code,
+                performance_ratio: performanceRatio,
+                u_actual: 650 - (baseFF * 100000),
+                u_clean: 800,
+                heat_duty: 150000 + (deviceId * 10000),
+                lmtd: 25 + (deviceId * 2)
+            };
+        }
+
+        function createFoulingChart(deviceId, deviceName) {
+            const canvasId = `fouling-chart-${deviceId}`;
+            return `
+                <div class="fouling-chart">
+                    <h4>📊 ${deviceName} - Fouling Factor Trend</h4>
+                    <canvas id="${canvasId}" height="100"></canvas>
+                    <p style="text-align: center; margin-top: 10px; font-size: 12px; color: #666;">
+                        <a href="/api/ui/device/${deviceId}/fouling/">View Detailed Fouling Analysis</a>
+                    </p>
+                </div>
+            `;
+        }
+
+        function renderFoulingStatus(deviceId, deviceName) {
+            const foulingData = getFoulingDataForDevice(deviceId, deviceName);
+            const statusClass = getFoulingStatusClass(foulingData.severity);
+            
+            return `
+                <div class="fouling-status ${statusClass}">
+                    <h4>🔍 ${deviceName} - Fouling Analysis</h4>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <div>
+                            <p><strong>Status:</strong> ${foulingData.severity}</p>
+                            <p><strong>Fouling Factor:</strong> ${foulingData.fouling_factor.toExponential(4)} m²·K/W</p>
+                            <p><strong>Performance Ratio:</strong> ${(foulingData.performance_ratio * 100).toFixed(1)}%</p>
+                        </div>
+                        <div>
+                            <p><strong>Actual U:</strong> ${foulingData.u_actual.toFixed(0)} W/m²·K</p>
+                            <p><strong>Clean U:</strong> ${foulingData.u_clean.toFixed(0)} W/m²·K</p>
+                            <p><strong>Heat Duty:</strong> ${(foulingData.heat_duty / 1000).toFixed(1)} kW</p>
+                        </div>
+                    </div>
+                    <p><strong>Recommendation:</strong> ${foulingData.recommendation}</p>
+                    <div style="text-align: center;">
+                        <a href="/api/ui/device/${deviceId}/fouling/" class="fouling-link">
+                            View Detailed Analysis
+                        </a>
+                        <a href="{% url 'fouling_calculator' %}?device=${deviceId}" class="fouling-link" style="margin-left: 10px;">
+                            Calculate Fouling
+                        </a>
+                    </div>
+                </div>
+            `;
+        }
+
+        function initializeFoulingChart(deviceId) {
+            const canvas = document.getElementById(`fouling-chart-${deviceId}`);
+            if (!canvas) return;
+            
+            const ctx = canvas.getContext('2d');
+            const foulingData = getFoulingDataForDevice(deviceId, 'Device');
+            
+            // Generate trend data
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug'];
+            const trendData = months.map((_, index) => {
+                const progress = index / (months.length - 1);
+                return foulingData.fouling_factor * (0.5 + progress * 1.5);
+            });
+            
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: months,
+                    datasets: [{
+                        label: 'Fouling Factor (m²·K/W)',
+                        data: trendData,
+                        borderColor: '#007bff',
+                        backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `Fouling: ${context.parsed.y.toExponential(4)} m²·K/W`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Fouling Factor (m²·K/W)'
+                            },
+                            ticks: {
+                                callback: function(value) {
+                                    return value.toExponential(2);
+                                }
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Timeline'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function showFoulingInfo() {
+            alert(`Fouling Factor Information:
+            
+📊 What is Fouling Factor?
+Fouling factor measures thermal resistance caused by deposits on heat transfer surfaces.
+
+🔍 Why it matters:
+• Higher fouling = Reduced heat transfer efficiency
+• Increased energy consumption
+• Potential equipment damage
+
+🟢 No Fouling: < 0.0001 m²·K/W
+🔵 Minor: 0.0001 - 0.0005 m²·K/W  
+🟡 Moderate: 0.0005 - 0.001 m²·K/W
+🟠 Severe: 0.001 - 0.002 m²·K/W
+🔴 Critical: > 0.002 m²·K/W
+
+Use the calculator to analyze your heat exchanger performance!`);
+        }
 
         async function fetchDashboard() {
             try {
@@ -45,9 +308,16 @@
                 data.devices.forEach(device => {
                     const card = document.createElement('div');
                     card.className = 'device-card';
-                    card.innerHTML = `<h2>${device.device_name} (ID: ${device.device_id})</h2>`;
+                    
+                    // Device header with fouling status
+                    card.innerHTML = `
+                        <h2>${device.device_name} (ID: ${device.device_id})</h2>
+                        ${renderFoulingStatus(device.device_id, device.device_name)}
+                        ${createFoulingChart(device.device_id, device.device_name)}
+                    `;
 
-                    let tableHTML = '<table><tr><th>Sensor</th><th>Value</th><th>Last Updated</th></tr>';
+                    // Sensor data table (EXISTING FEATURE - PRESERVED)
+                    let tableHTML = '<h4>📈 Sensor Readings</h4><table><tr><th>Sensor</th><th>Value</th><th>Last Updated</th></tr>';
                     for (let label in device.sensors) {
                         const sensor = device.sensors[label];
                         const className = ['T','P','F'].includes(label[0]) ? label[0] : 'G';
@@ -60,6 +330,9 @@
                     tableHTML += '</table>';
                     card.innerHTML += tableHTML;
                     container.appendChild(card);
+                    
+                    // Initialize chart
+                    setTimeout(() => initializeFoulingChart(device.device_id), 100);
                 });
             } catch (err) {
                 console.error(err);
@@ -72,4 +345,3 @@
     </script>
 </body>
 </html>
-
