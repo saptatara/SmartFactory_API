@@ -18,6 +18,7 @@ from .forms import SensorDataForm
 from rest_framework.authtoken.models import Token
 import json
 from collections import defaultdict
+import math
 
 # ------------------------
 # Helper utilities
@@ -41,6 +42,302 @@ def format_ist_timestamp(dt):
     
     return ist_time.strftime("%Y-%m-%d %H:%M:%S")
 
+# ==================== FOULING FACTOR CALCULATIONS ====================
+
+def calculate_clean_overall_heat_transfer_coefficient(
+    hot_flow_rate, cold_flow_rate, 
+    hot_inlet_temp, hot_outlet_temp,
+    cold_inlet_temp, cold_outlet_temp,
+    heat_transfer_area
+):
+    """
+    Calculate clean overall heat transfer coefficient (U_clean)
+    
+    Parameters:
+    - hot_flow_rate: Hot fluid flow rate (kg/s)
+    - cold_flow_rate: Cold fluid flow rate (kg/s)  
+    - hot_inlet_temp: Hot fluid inlet temperature (°C)
+    - hot_outlet_temp: Hot fluid outlet temperature (°C)
+    - cold_inlet_temp: Cold fluid inlet temperature (°C)
+    - cold_outlet_temp: Cold fluid outlet temperature (°C)
+    - heat_transfer_area: Heat transfer area (m²)
+    
+    Returns:
+    - U_clean: Clean overall heat transfer coefficient (W/m²·K)
+    - heat_duty: Heat transfer rate (W)
+    - lmtd: Log Mean Temperature Difference (K)
+    """
+    # Specific heat capacity of water (J/kg·K) - can be parameterized later
+    cp = 4186  # J/kg·K
+    
+    # Calculate heat duty from both streams
+    heat_duty_hot = hot_flow_rate * cp * (hot_inlet_temp - hot_outlet_temp)
+    heat_duty_cold = cold_flow_rate * cp * (cold_outlet_temp - cold_inlet_temp)
+    
+    # Use average heat duty
+    heat_duty = (heat_duty_hot + heat_duty_cold) / 2
+    
+    # Calculate Log Mean Temperature Difference (LMTD)
+    delta_t1 = hot_inlet_temp - cold_outlet_temp  # Temperature difference at one end
+    delta_t2 = hot_outlet_temp - cold_inlet_temp  # Temperature difference at other end
+    
+    if delta_t1 <= 0 or delta_t2 <= 0:
+        raise ValueError("Temperature cross detected - check input temperatures")
+    
+    if delta_t1 == delta_t2:
+        lmtd = delta_t1
+    else:
+        lmtd = (delta_t1 - delta_t2) / math.log(delta_t1 / delta_t2)
+    
+    # Calculate clean overall heat transfer coefficient
+    U_clean = heat_duty / (heat_transfer_area * lmtd)
+    
+    return {
+        'U_clean': U_clean,
+        'heat_duty': heat_duty,
+        'lmtd': lmtd,
+        'heat_duty_hot': heat_duty_hot,
+        'heat_duty_cold': heat_duty_cold
+    }
+
+def calculate_fouling_factor(
+    hot_flow_rate, cold_flow_rate,
+    hot_inlet_temp, hot_outlet_temp, 
+    cold_inlet_temp, cold_outlet_temp,
+    heat_transfer_area, U_clean
+):
+    """
+    Calculate fouling factor based on current operating conditions
+    
+    Parameters:
+    - All previous parameters plus:
+    - U_clean: Clean overall heat transfer coefficient (W/m²·K)
+    
+    Returns:
+    - fouling_factor: Fouling factor (m²·K/W)
+    - U_actual: Actual overall heat transfer coefficient (W/m²·K)
+    - performance_ratio: Ratio of actual to clean heat transfer performance
+    """
+    
+    # Calculate actual overall heat transfer coefficient
+    clean_data = calculate_clean_overall_heat_transfer_coefficient(
+        hot_flow_rate, cold_flow_rate,
+        hot_inlet_temp, hot_outlet_temp,
+        cold_inlet_temp, cold_outlet_temp,
+        heat_transfer_area
+    )
+    
+    U_actual = clean_data['U_clean']
+    heat_duty = clean_data['heat_duty']
+    lmtd = clean_data['lmtd']
+    
+    # Calculate fouling factor
+    if U_actual > 0 and U_clean > 0:
+        fouling_factor = (1/U_actual) - (1/U_clean)
+        performance_ratio = U_actual / U_clean
+    else:
+        fouling_factor = 0
+        performance_ratio = 0
+    
+    return {
+        'fouling_factor': max(fouling_factor, 0),  # Fouling factor cannot be negative
+        'U_actual': U_actual,
+        'U_clean': U_clean,
+        'performance_ratio': performance_ratio,
+        'heat_duty': heat_duty,
+        'lmtd': lmtd,
+        'fouling_resistance': fouling_factor * 10000  # Convert to cm²·K/W
+    }
+
+def assess_fouling_severity(fouling_factor):
+    """
+    Assess the severity of fouling based on fouling factor value
+    
+    Parameters:
+    - fouling_factor: Fouling factor (m²·K/W)
+    
+    Returns:
+    - severity: Text description of fouling severity
+    - recommendation: Maintenance recommendation
+    - color_code: Color code for UI display
+    """
+    fouling_resistance_cm2 = fouling_factor * 10000  # Convert to cm²·K/W
+    
+    if fouling_resistance_cm2 < 0.0001:
+        return {
+            'severity': 'No Fouling',
+            'recommendation': 'Normal operation',
+            'color_code': 'green',
+            'risk_level': 'Low'
+        }
+    elif fouling_resistance_cm2 < 0.0005:
+        return {
+            'severity': 'Minor Fouling', 
+            'recommendation': 'Monitor closely, consider routine cleaning',
+            'color_code': 'blue',
+            'risk_level': 'Low'
+        }
+    elif fouling_resistance_cm2 < 0.001:
+        return {
+            'severity': 'Moderate Fouling',
+            'recommendation': 'Schedule cleaning in near future',
+            'color_code': 'yellow', 
+            'risk_level': 'Medium'
+        }
+    elif fouling_resistance_cm2 < 0.002:
+        return {
+            'severity': 'Severe Fouling',
+            'recommendation': 'Schedule immediate cleaning',
+            'color_code': 'orange',
+            'risk_level': 'High'
+        }
+    else:
+        return {
+            'severity': 'Critical Fouling',
+            'recommendation': 'Emergency shutdown required for cleaning',
+            'color_code': 'red',
+            'risk_level': 'Critical'
+        }
+
+# ==================== FOULING FACTOR API ENDPOINTS ====================
+
+@api_view(["POST"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def calculate_fouling_api(request):
+    """
+    API endpoint to calculate fouling factor
+    """
+    try:
+        data = request.data
+        
+        required_params = [
+            'hot_flow_rate', 'cold_flow_rate', 
+            'hot_inlet_temp', 'hot_outlet_temp',
+            'cold_inlet_temp', 'cold_outlet_temp', 
+            'heat_transfer_area', 'U_clean'
+        ]
+        
+        # Validate required parameters
+        for param in required_params:
+            if param not in data:
+                return Response(
+                    {"error": f"Missing required parameter: {param}"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        # Extract parameters
+        hot_flow_rate = float(data['hot_flow_rate'])
+        cold_flow_rate = float(data['cold_flow_rate'])
+        hot_inlet_temp = float(data['hot_inlet_temp'])
+        hot_outlet_temp = float(data['hot_outlet_temp'])
+        cold_inlet_temp = float(data['cold_inlet_temp'])
+        cold_outlet_temp = float(data['cold_outlet_temp'])
+        heat_transfer_area = float(data['heat_transfer_area'])
+        U_clean = float(data['U_clean'])
+        
+        # Calculate fouling factor
+        result = calculate_fouling_factor(
+            hot_flow_rate, cold_flow_rate,
+            hot_inlet_temp, hot_outlet_temp,
+            cold_inlet_temp, cold_outlet_temp,
+            heat_transfer_area, U_clean
+        )
+        
+        # Add severity assessment
+        severity_info = assess_fouling_severity(result['fouling_factor'])
+        result.update(severity_info)
+        
+        # Add timestamp
+        result['calculated_at'] = format_ist_timestamp(timezone.now())
+        
+        return Response(result)
+        
+    except ValueError as e:
+        return Response(
+            {"error": f"Invalid parameter value: {str(e)}"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    except Exception as e:
+        return Response(
+            {"error": f"Calculation failed: {str(e)}"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(["POST"])
+@authentication_classes([TokenAuthentication]) 
+@permission_classes([IsAuthenticated])
+def calculate_clean_u_api(request):
+    """
+    API endpoint to calculate clean overall heat transfer coefficient
+    """
+    try:
+        data = request.data
+        
+        required_params = [
+            'hot_flow_rate', 'cold_flow_rate',
+            'hot_inlet_temp', 'hot_outlet_temp', 
+            'cold_inlet_temp', 'cold_outlet_temp',
+            'heat_transfer_area'
+        ]
+        
+        # Validate required parameters
+        for param in required_params:
+            if param not in data:
+                return Response(
+                    {"error": f"Missing required parameter: {param}"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        # Extract parameters
+        hot_flow_rate = float(data['hot_flow_rate'])
+        cold_flow_rate = float(data['cold_flow_rate'])
+        hot_inlet_temp = float(data['hot_inlet_temp'])
+        hot_outlet_temp = float(data['hot_outlet_temp'])
+        cold_inlet_temp = float(data['cold_inlet_temp'])
+        cold_outlet_temp = float(data['cold_outlet_temp'])
+        heat_transfer_area = float(data['heat_transfer_area'])
+        
+        # Calculate clean overall heat transfer coefficient
+        result = calculate_clean_overall_heat_transfer_coefficient(
+            hot_flow_rate, cold_flow_rate,
+            hot_inlet_temp, hot_outlet_temp,
+            cold_inlet_temp, cold_outlet_temp,
+            heat_transfer_area
+        )
+        
+        # Add timestamp
+        result['calculated_at'] = format_ist_timestamp(timezone.now())
+        
+        return Response(result)
+        
+    except ValueError as e:
+        return Response(
+            {"error": f"Invalid parameter value: {str(e)}"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    except Exception as e:
+        return Response(
+            {"error": f"Calculation failed: {str(e)}"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+# ==================== FOULING FACTOR UI VIEWS ====================
+
+@login_required
+def fouling_calculator(request):
+    """
+    UI view for fouling factor calculator
+    """
+    return render(request, "api/fouling_calculator.html")
+
+@login_required
+def fouling_monitoring(request, device_id):
+    """
+    UI view for fouling factor monitoring for a specific device
+    """
+    device = get_object_or_404(Device, id=device_id, customer__user=request.user)
+    return render(request, "api/fouling_monitoring.html", {"device": device})
 
 # ==================== AUTH ====================
 
@@ -345,7 +642,8 @@ def customer_devices_data(request, dashboard_uuid):
     This ensures backward compatibility with URLs referencing /data/.
     """
     try:
-        devices = Device.objects.filter(customer__dashboard_uuid=dashboard_uuid)
+        customer = get_object_or_404(Customer, dashboard_url=dashboard_uuid)
+        devices = Device.objects.filter(customer=customer, is_active=True)
         data = []
         for device in devices:
             latest_data = SensorData.objects.filter(device=device).order_by('-created_at').first()

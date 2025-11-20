@@ -99,3 +99,25 @@ class IoTData(models.Model):
     def __str__(self):
         return f"{self.device.name} - {self.key}: {self.value} {self.unit or ''}"
 
+
+class FoulingData(models.Model):
+    """Model to store fouling factor calculations"""
+    device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name="fouling_data")
+    fouling_factor = models.FloatField(help_text="Fouling factor in m²·K/W")
+    u_actual = models.FloatField(help_text="Actual overall heat transfer coefficient in W/m²·K")
+    u_clean = models.FloatField(help_text="Clean overall heat transfer coefficient in W/m²·K")
+    performance_ratio = models.FloatField(help_text="Ratio of actual to clean heat transfer performance")
+    heat_duty = models.FloatField(help_text="Heat transfer rate in W")
+    lmtd = models.FloatField(help_text="Log Mean Temperature Difference in K")
+    severity = models.CharField(max_length=50, help_text="Fouling severity level")
+    recommendation = models.TextField(blank=True, help_text="Maintenance recommendation")
+    risk_level = models.CharField(max_length=20, help_text="Risk level")
+    calculated_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-calculated_at"]
+        verbose_name = "Fouling Data"
+        verbose_name_plural = "Fouling Data"
+
+    def __str__(self):
+        return f"{self.device.name} - Fouling: {self.fouling_factor:.6f} ({self.severity})"

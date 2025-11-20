@@ -7,6 +7,7 @@ from .models import (
     SensorConfiguration,
     SensorData,
     IoTData,
+    FoulingData,
 )
 
 
@@ -153,3 +154,28 @@ class IoTDataAdmin(CustomerSpecificAdmin):
             kwargs["queryset"] = Device.objects.filter(customer__user=request.user)
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
+
+@admin.register(FoulingData)
+class FoulingDataAdmin(CustomerSpecificAdmin):
+    """Admin for fouling factor calculations"""
+    
+    list_display = ["device", "fouling_factor", "u_actual", "u_clean", "performance_ratio", "severity", "calculated_at"]
+    list_filter = ["severity", "risk_level", "device", "calculated_at"]
+    search_fields = ["device__name", "severity", "recommendation"]
+    readonly_fields = ["calculated_at"]
+    date_hierarchy = "calculated_at"
+    
+    class Meta:
+        verbose_name = "Fouling Data"
+        verbose_name_plural = "Fouling Data"
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        if request.user.is_superuser:
+            return qs
+        return qs.filter(device__customer__user=request.user)
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == "device" and not request.user.is_superuser:
+            kwargs["queryset"] = Device.objects.filter(customer__user=request.user)
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)

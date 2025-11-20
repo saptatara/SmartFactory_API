@@ -10,6 +10,10 @@ urlpatterns = [
     path('ui/add-sensor-data/', views.add_sensor_data, name='add_sensor_data'),
     path('ui/sensor-configs/', views.sensor_configurations, name='sensor_configurations'),
 
+    # ==================== FOULING FACTOR UI VIEWS ====================
+    path('ui/fouling-calculator/', views.fouling_calculator, name='fouling_calculator'),
+    path('ui/device/<int:device_id>/fouling/', views.fouling_monitoring, name='fouling_monitoring'),
+
     path('ui/login/', views.customer_login, name='customer_login'),
     path('ui/logout/', views.customer_logout, name='customer_logout'),
 
@@ -25,6 +29,10 @@ urlpatterns = [
     path('devices/', views.device_list, name='device_list'),
     path('devices/<int:device_id>/', views.device_detail_api, name='device_detail_api'),
 
+    # ==================== FOULING FACTOR API ====================
+    path('fouling/calculate/', views.calculate_fouling_api, name='calculate_fouling'),
+    path('fouling/calculate-clean-u/', views.calculate_clean_u_api, name='calculate_clean_u'),
+
     # ==================== AUTHENTICATION API ====================
     path('create_apikey/', views.create_apikey, name='create_apikey'),
     path('get_apikey/', views.get_apikey, name='get_apikey'),
@@ -33,4 +41,3 @@ urlpatterns = [
     # ==================== CUSTOMER DEVICES API ====================
     path('customer/<int:customer_id>/devices/', views.customer_devices, name='customer_devices'),
 ]
-

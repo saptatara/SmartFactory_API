@@ -3,7 +3,7 @@ from rest_framework import serializers
 from django.utils import timezone
 from .models import (
     Customer, Device, DeviceType,
-    SensorData, SensorConfiguration, SensorType, IoTData
+    SensorData, SensorConfiguration, SensorType, IoTData, FoulingData
 )
 
 
@@ -85,3 +85,24 @@ class IoTDataSerializer(serializers.ModelSerializer):
         model = IoTData
         fields = ["id", "device_name", "key", "value", "unit", "notes", "is_alert", "alert_message", "created_at"]
 
+
+class FoulingDataSerializer(serializers.ModelSerializer):
+    device_name = serializers.CharField(source="device.name", read_only=True)
+    calculated_at_ist = serializers.SerializerMethodField()
+
+    class Meta:
+        model = FoulingData
+        fields = [
+            "id", "device_name", "fouling_factor", "u_actual", "u_clean", 
+            "performance_ratio", "heat_duty", "lmtd", "severity", 
+            "recommendation", "risk_level", "calculated_at", "calculated_at_ist"
+        ]
+
+    def get_calculated_at_ist(self, obj):
+        # Convert to IST timezone
+        ist = timezone.get_fixed_timezone(330)  # IST is UTC+5:30
+        if timezone.is_aware(obj.calculated_at):
+            ist_time = obj.calculated_at.astimezone(ist)
+        else:
+            ist_time = timezone.make_aware(obj.calculated_at, timezone=ist)
+        return ist_time.strftime("%Y-%m-%d %H:%M:%S")
