@@ -95,7 +95,7 @@ WSGI_APPLICATION = 'iot_platform.wsgi.application'
 DATABASES = {
     "default": dj_database_url.parse(
         os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR / 'db.sqlite3'}"),
-        conn_max_age=600,
+        conn_max_age=300,
     )
 }
 
@@ -134,37 +134,49 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # ================================================================
 # Licensing enforcement - WITH SSL FIX
 # ================================================================
+# ================================================================
+# Non-blocking license check
+# ================================================================
 import os
 import requests
 from datetime import date
+import threading
 
-LICENSE_KEY = os.getenv("LICENSE_KEY")
-LICENSE_END = os.getenv("LICENSE_END")
-LICENSE_SERVER_URL = os.getenv("LICENSE_SERVER_URL")
+def check_license_async():
+    """Check license in background without blocking startup"""
+    LICENSE_KEY = os.getenv("LICENSE_KEY")
+    LICENSE_END = os.getenv("LICENSE_END")
+    LICENSE_SERVER_URL = os.getenv("LICENSE_SERVER_URL")
+    
+    try:
+        # Check expiry date first
+        expiry = date.fromisoformat(LICENSE_END) if LICENSE_END else None
+        if expiry and expiry < date.today():
+            print("❌ License expired. Please contact support to renew.")
+            return False
 
-try:
-    expiry = date.fromisoformat(LICENSE_END) if LICENSE_END else None
-    if expiry and expiry < date.today():
-        raise SystemExit("❌ License expired. Please contact support to renew.")
+        # Remote check with SSL workaround
+        if LICENSE_SERVER_URL and LICENSE_KEY:
+            try:
+                r = requests.get(
+                    LICENSE_SERVER_URL,
+                    params={"key": LICENSE_KEY, "customer": os.getenv("CUSTOMER_NAME")},
+                    timeout=15,
+                    verify=False
+                )
+                if r.status_code == 200 and r.json().get("valid", False):
+                    print("✅ License verified successfully")
+                    return True
+                else:
+                    print("⚠️ License verification failed")
+                    return False
+            except Exception as e:
+                print(f"⚠️ License server unreachable: {e}")
+                return True  # Don't block if server is down
+    except Exception as e:
+        print(f"⚠️ License check error: {e}")
+        return True  # Don't block on license errors
 
-    # Optional: verify remotely WITH SSL FIX
-    if LICENSE_SERVER_URL and LICENSE_KEY:
-        try:
-            # Disable SSL verification temporarily to fix handshake issues
-            r = requests.get(
-                LICENSE_SERVER_URL, 
-                params={
-                    "key": LICENSE_KEY, 
-                    "customer": os.getenv("CUSTOMER_NAME")
-                }, 
-                timeout=10,
-                verify=False  # ← THIS IS THE FIX
-            )
-            if r.status_code != 200 or not r.json().get("valid", False):
-                raise SystemExit("❌ License verification failed. Contact admin.")
-        except Exception as e:
-            print(f"⚠️ License check warning: {e}")
-            # Don't exit on license server connection issues, just warn
-except Exception as e:
-    raise SystemExit(f"❌ Licensing error: {e}")
-
+# Run license check in background thread
+license_thread = threading.Thread(target=check_license_async, daemon=True)
+license_thread.start()
