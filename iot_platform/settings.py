@@ -6,6 +6,32 @@ import dj_database_url
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+
+
+
+
+#---------------------------------
+#SMS Alerts
+#---------------------------------
+# in settings.py or via environment variables
+TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
+TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
+TWILIO_FROM_NUMBER = os.getenv("TWILIO_FROM_NUMBER")   # E.164 format, e.g. +1XXXXXXXXX
+ALERT_SMS_TO = os.getenv("ALERT_SMS_TO")               # recipient phone number (E.164)
+
+# Thresholds (can override)
+THRESHOLD_T1IN = float(os.getenv("THRESHOLD_T1IN", 80.0))
+THRESHOLD_T2IN = float(os.getenv("THRESHOLD_T2IN", 80.0))
+THRESHOLD_T1OUT = float(os.getenv("THRESHOLD_T1OUT", 80.0))
+THRESHOLD_T2OUT = float(os.getenv("THRESHOLD_T2OUT", 80.0))
+THRESHOLD_PRESSURE = float(os.getenv("THRESHOLD_PRESSURE", 10.0))
+THRESHOLD_FOULING = float(os.getenv("THRESHOLD_FOULING", 0.001))
+
+# Optional: cooldown in seconds to avoid repeated alerts
+SMS_ALERT_COOLDOWN_SECONDS = int(os.getenv("SMS_ALERT_COOLDOWN_SECONDS", 1800))
+
+
+
 # ---------------------------------------------------------
 # Base and environment setup
 # ---------------------------------------------------------

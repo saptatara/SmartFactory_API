@@ -17,6 +17,109 @@ from .serializers import DeviceSerializer, SensorDataSerializer, IoTDataSerializ
 from .forms import SensorDataForm
 from rest_framework.authtoken.models import Token
 import json
+
+
+import os
+import logging
+from django.conf import settings
+try:
+    from twilio.rest import Client
+except Exception:
+    Client = None  # Twilio not installed; send_sms will raise if used
+
+logger = logging.getLogger(__name__)
+
+# Simple in-memory cooldown for alerts: {(device_id, sensor_label): timestamp}
+_last_alert_sent = {}
+
+def get_twilio_client():
+    account_sid = getattr(settings, "TWILIO_ACCOUNT_SID", None) or os.getenv("TWILIO_ACCOUNT_SID")
+    auth_token = getattr(settings, "TWILIO_AUTH_TOKEN", None) or os.getenv("TWILIO_AUTH_TOKEN")
+    if not account_sid or not auth_token:
+        raise RuntimeError("Twilio credentials are not configured (TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN).")
+    if Client is None:
+        raise RuntimeError("twilio package not installed. Add 'twilio' to requirements.txt.")
+    return Client(account_sid, auth_token)
+
+def send_sms(body: str, to: str = None, from_number: str = None):
+    """Send SMS via Twilio. Raises on failure but callers should handle exceptions."""
+    to = to or getattr(settings, "ALERT_SMS_TO", None) or os.getenv("ALERT_SMS_TO")
+    if not to:
+        raise RuntimeError("No recipient phone number configured (ALERT_SMS_TO).")
+    from_number = from_number or getattr(settings, "TWILIO_FROM_NUMBER", None) or os.getenv("TWILIO_FROM_NUMBER")
+    client = get_twilio_client()
+    msg = client.messages.create(body=body, from_=from_number, to=to)
+    logger.info("Sent SMS alert sid=%s to=%s", getattr(msg, "sid", ""), to)
+    return getattr(msg, "sid", None)
+
+def _should_send_alert(device_id, sensor_label, cooldown_seconds=None):
+    import time
+    cooldown_seconds = cooldown_seconds or getattr(settings, "SMS_ALERT_COOLDOWN_SECONDS", 1800)
+    key = (device_id, sensor_label)
+    last = _last_alert_sent.get(key)
+    now = time.time()
+    if last and (now - last) < cooldown_seconds:
+        return False
+    _last_alert_sent[key] = now
+    return True
+
+def _get_threshold_for_label(label):
+    """Return threshold value (float) and comparison direction ('gt' means alert if value > threshold,
+    'lt' means alert if value < threshold). Defaults assume upper thresholds (gt)."""
+    label = label.lower()
+    # Temperature thresholds (°C) - defaults can be overridden in Django settings
+    thresholds = {
+        't1in': getattr(settings, 'THRESHOLD_T1IN', None),
+        't2in': getattr(settings, 'THRESHOLD_T2IN', None),
+        't1out': getattr(settings, 'THRESHOLD_T1OUT', None),
+        't2out': getattr(settings, 'THRESHOLD_T2OUT', None),
+        'pressure': getattr(settings, 'THRESHOLD_PRESSURE', None),
+        'fouling': getattr(settings, 'THRESHOLD_FOULING', None),
+    }
+    # Default fallbacks (if user hasn't configured settings)
+    defaults = {
+        't1in': 80.0,
+        't2in': 80.0,
+        't1out': 80.0,
+        't2out': 80.0,
+        'pressure': 10.0,
+        'fouling': 0.001,  # example default
+    }
+    thr = thresholds.get(label)
+    if thr is None:
+        thr = defaults.get(label)
+    # comparison direction: for most sensors, alert when value > threshold
+    direction = 'gt'
+    return float(thr), direction
+
+def check_and_alert(device, sensor_label, value):
+    """Check threshold for the given sensor_label and send SMS alert if threshold crossed.
+    This function is defensive — any exception is logged and swallowed so it doesn't break ingest.
+    """
+    try:
+        lab = sensor_label.lower()
+        thr, direction = _get_threshold_for_label(lab)
+        if thr is None:
+            return False
+        # Try convert value to float
+        val = float(value)
+        exceeded = False
+        if direction == 'gt' and val > thr:
+            exceeded = True
+        elif direction == 'lt' and val < thr:
+            exceeded = True
+        if exceeded and _should_send_alert(device.id, lab):
+            to = getattr(settings, 'ALERT_SMS_TO', None) or os.getenv('ALERT_SMS_TO')
+            body = f"ALERT: Device '{device.name}' sensor '{sensor_label}' value={val} exceeded threshold={thr}."
+            try:
+                send_sms(body=body, to=to)
+            except Exception as e:
+                logger.exception("Failed to send SMS alert: %s", e)
+            return True
+    except Exception:
+        logger.exception("Error during check_and_alert for %s", sensor_label)
+    return False
+
 from collections import defaultdict
 import math
 
@@ -461,6 +564,14 @@ def write_data(request, device_id):
         d = SensorData.objects.create(device=device, sensor_config=sensor_config, value=float(value))
         created_data.append(d)
 
+        # --- SMS Alerting: check thresholds for important sensors (non-blocking) ---
+        try:
+            # call check_and_alert for some sensor labels (t1in,t2in,t1out,t2out,pressure,fouling)
+            check_and_alert(device, sensor_config.sensor_label, d.value)
+        except Exception as e:
+            logger.exception("SMS alert check failed: %s", e)
+
+
     return Response([
         {"id": d.id, "device": d.device.id, "sensor_label": d.sensor_config.sensor_label,
          "value": d.value, "created_at": format_ist_timestamp(d.created_at)}  # Use IST timestamp
@@ -664,3 +775,4 @@ def customer_devices_data(request, dashboard_uuid):
         return JsonResponse({'devices': data})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+

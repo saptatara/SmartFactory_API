@@ -124,6 +124,27 @@ LICENSE_KEY=${LICENSE_KEY}
 LICENSE_START=${LICENSE_START}
 LICENSE_END=${LICENSE_END}
 LICENSE_SERVER_URL=https://license.smartfactory.com/verify
+# ---------------------------
+# Twilio SMS configuration
+# (These values are read by Django settings via os.getenv)
+# You can set them in your shell before running this script, or leave blank to fill later.
+TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID:-""}
+TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN:-""}
+TWILIO_FROM_NUMBER=${TWILIO_FROM_NUMBER:-""}
+ALERT_SMS_TO=${ALERT_SMS_TO:-""}
+
+# Optional per-tenant default thresholds (can be overridden by environment or settings)
+THRESHOLD_T1IN=${THRESHOLD_T1IN:-50.0}
+THRESHOLD_T2IN=${THRESHOLD_T2IN:-50.0}
+THRESHOLD_T1OUT=${THRESHOLD_T1OUT:-50.0}
+THRESHOLD_T2OUT=${THRESHOLD_T2OUT:-50.0}
+THRESHOLD_PRESSURE=${THRESHOLD_PRESSURE:-10.0}
+THRESHOLD_FOULING=${THRESHOLD_FOULING:-0.001}
+
+# SMS cooldown (seconds) to reduce repeated alerts
+SMS_ALERT_COOLDOWN_SECONDS=${SMS_ALERT_COOLDOWN_SECONDS:-1800}
+# ---------------------------
+
 EOF
 
 # copy into tenant dir and create plain .env
@@ -275,3 +296,4 @@ echo "  docker compose --env-file \"${ENV_PATH_TENANT}\" -p \"${PROJECT_NAME}\" 
 echo ""
 echo "To stop this tenant:"
 echo "  docker compose --env-file \"${ENV_PATH_TENANT}\" -p \"${PROJECT_NAME}\" down"
+
