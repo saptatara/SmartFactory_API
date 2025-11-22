@@ -63,54 +63,95 @@ def _should_send_alert(device_id, sensor_label, cooldown_seconds=None):
     _last_alert_sent[key] = now
     return True
 
+def _normalize_label(label: str) -> str:
+    """
+    Normalize various sensor labels to canonical keys used for thresholds.
+    This lets us handle labels like 't1_in', 'T1-IN', 'T1 INLET', etc.
+    """
+    if not label:
+        return ""
+    l = label.strip().lower()
+
+    # Temperature probes
+    # Your actual labels: t1_in, t1_out, t2_in, t2_out
+    if l in ("t1_in", "t1in", "t1-in", "t1 inlet", "t1 in"):
+        return "t1in"
+    if l in ("t2_in", "t2in", "t2-in", "t2 inlet", "t2 in"):
+        return "t2in"
+    if l in ("t1_out", "t1out", "t1-out", "t1 outlet", "t1 out"):
+        return "t1out"
+    if l in ("t2_out", "t2out", "t2-out", "t2 outlet", "t2 out"):
+        return "t2out"
+
+    # Pressure – your label: dpt1
+    if l in ("pressure", "press", "dpt", "dpt1", "dp", "dp1"):
+        return "pressure"
+
+    # Fouling
+    if "foul" in l:
+        return "fouling"
+
+    # Fallback: use original lowercased label
+    return l
+
+
 def _get_threshold_for_label(label):
-    """Return threshold value (float) and comparison direction ('gt' means alert if value > threshold,
-    'lt' means alert if value < threshold). Defaults assume upper thresholds (gt)."""
+    """
+    Return (threshold_value, direction) for a canonical label.
+    Label must already be normalized via _normalize_label().
+    """
     label = label.lower()
-    # Temperature thresholds (°C) - defaults can be overridden in Django settings
     thresholds = {
-        't1in': getattr(settings, 'THRESHOLD_T1IN', None),
-        't2in': getattr(settings, 'THRESHOLD_T2IN', None),
-        't1out': getattr(settings, 'THRESHOLD_T1OUT', None),
-        't2out': getattr(settings, 'THRESHOLD_T2OUT', None),
-        'pressure': getattr(settings, 'THRESHOLD_PRESSURE', None),
-        'fouling': getattr(settings, 'THRESHOLD_FOULING', None),
+        "t1in": getattr(settings, "THRESHOLD_T1IN", None),
+        "t2in": getattr(settings, "THRESHOLD_T2IN", None),
+        "t1out": getattr(settings, "THRESHOLD_T1OUT", None),
+        "t2out": getattr(settings, "THRESHOLD_T2OUT", None),
+        "pressure": getattr(settings, "THRESHOLD_PRESSURE", None),
+        "fouling": getattr(settings, "THRESHOLD_FOULING", None),
     }
-    # Default fallbacks (if user hasn't configured settings)
     defaults = {
-        't1in': 80.0,
-        't2in': 80.0,
-        't1out': 80.0,
-        't2out': 80.0,
-        'pressure': 10.0,
-        'fouling': 0.001,  # example default
+        "t1in": 80.0,
+        "t2in": 80.0,
+        "t1out": 80.0,
+        "t2out": 80.0,
+        "pressure": 10.0,
+        "fouling": 0.001,
     }
     thr = thresholds.get(label)
     if thr is None:
         thr = defaults.get(label)
-    # comparison direction: for most sensors, alert when value > threshold
-    direction = 'gt'
+    if thr is None:
+        return None, None  # no threshold configured for this label
+    direction = "gt"  # for now: alert when value > threshold
     return float(thr), direction
 
+
 def check_and_alert(device, sensor_label, value):
-    """Check threshold for the given sensor_label and send SMS alert if threshold crossed.
+    """
+    Check threshold for the given sensor_label and send SMS alert if threshold crossed.
     This function is defensive — any exception is logged and swallowed so it doesn't break ingest.
     """
     try:
-        lab = sensor_label.lower()
-        thr, direction = _get_threshold_for_label(lab)
+        # Normalize to canonical label used by thresholds
+        canonical = _normalize_label(sensor_label)
+        thr, direction = _get_threshold_for_label(canonical)
         if thr is None:
             return False
-        # Try convert value to float
+
+        # Convert value to float
         val = float(value)
         exceeded = False
-        if direction == 'gt' and val > thr:
+        if direction == "gt" and val > thr:
             exceeded = True
-        elif direction == 'lt' and val < thr:
+        elif direction == "lt" and val < thr:
             exceeded = True
-        if exceeded and _should_send_alert(device.id, lab):
-            to = getattr(settings, 'ALERT_SMS_TO', None) or os.getenv('ALERT_SMS_TO')
-            body = f"ALERT: Device '{device.name}' sensor '{sensor_label}' value={val} exceeded threshold={thr}."
+
+        if exceeded and _should_send_alert(device.id, canonical):
+            to = getattr(settings, "ALERT_SMS_TO", None) or os.getenv("ALERT_SMS_TO")
+            body = (
+                f"ALERT: Device '{device.name}' sensor '{sensor_label}' "
+                f"value={val} exceeded threshold={thr}."
+            )
             try:
                 send_sms(body=body, to=to)
             except Exception as e:
