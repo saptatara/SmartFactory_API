@@ -42,15 +42,27 @@ def get_twilio_client():
     return Client(account_sid, auth_token)
 
 def send_sms(body: str, to: str = None, from_number: str = None):
-    """Send SMS via Twilio. Raises on failure but callers should handle exceptions."""
-    to = to or getattr(settings, "ALERT_SMS_TO", None) or os.getenv("ALERT_SMS_TO")
-    if not to:
-        raise RuntimeError("No recipient phone number configured (ALERT_SMS_TO).")
+    """
+    Send SMS to one or more recipients.
+    ALERT_SMS_TO may contain comma or space separated numbers.
+    """
+    raw_to = to or getattr(settings, "ALERT_SMS_TO", None) or os.getenv("ALERT_SMS_TO")
+    if not raw_to:
+        raise RuntimeError("No recipient phone number(s) configured (ALERT_SMS_TO).")
+
+    # Split by comma or space
+    numbers = [n.strip() for n in raw_to.replace(" ", ",").split(",") if n.strip()]
+
     from_number = from_number or getattr(settings, "TWILIO_FROM_NUMBER", None) or os.getenv("TWILIO_FROM_NUMBER")
     client = get_twilio_client()
-    msg = client.messages.create(body=body, from_=from_number, to=to)
-    logger.info("Sent SMS alert sid=%s to=%s", getattr(msg, "sid", ""), to)
-    return getattr(msg, "sid", None)
+
+    sids = []
+    for num in numbers:
+        msg = client.messages.create(body=body, from_=from_number, to=num)
+        logger.info("Sent SMS alert sid=%s to=%s", getattr(msg, "sid", ""), num)
+        sids.append(getattr(msg, "sid", None))
+
+    return sids
 
 def _should_send_alert(device_id, sensor_label, cooldown_seconds=None):
     import time
