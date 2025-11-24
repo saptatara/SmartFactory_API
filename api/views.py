@@ -234,8 +234,8 @@ def calculate_clean_overall_heat_transfer_coefficient(
     heat_duty = (heat_duty_hot + heat_duty_cold) / 2
     
     # Calculate Log Mean Temperature Difference (LMTD)
-    delta_t1 = hot_inlet_temp - cold_outlet_temp  # Temperature difference at one end
-    delta_t2 = hot_outlet_temp - cold_inlet_temp  # Temperature difference at other end
+    delta_t1 = hot_inlet_temp - cold_inlet_temp  # Temperature difference at one end
+    delta_t2 = hot_outlet_temp - cold_outlet_temp  # Temperature difference at other end
     
     if delta_t1 <= 0 or delta_t2 <= 0:
         raise ValueError("Temperature cross detected - check input temperatures")
