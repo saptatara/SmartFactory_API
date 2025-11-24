@@ -172,9 +172,87 @@ def check_and_alert(device, sensor_label, value):
     except Exception:
         logger.exception("Error during check_and_alert for %s", sensor_label)
     return False
+from rest_framework.authentication import SessionAuthentication, TokenAuthentication
+import math
+
+def _latest_sensor_value(device, label):
+    """
+    Return latest SensorData.value for the given device + sensor_label,
+    or None if not found.
+    """
+    try:
+        sc = SensorConfiguration.objects.get(device=device, sensor_label=label)
+    except SensorConfiguration.DoesNotExist:
+        return None
+    sd = SensorData.objects.filter(device=device, sensor_config=sc).order_by("-created_at").first()
+    return sd.value if sd else None
+
 
 from collections import defaultdict
 import math
+from django.conf import settings
+from rest_framework.decorators import api_view, authentication_classes, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.authentication import TokenAuthentication
+from rest_framework.response import Response
+from rest_framework import status
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def device_fouling_snapshot(request, device_id):
+    """
+    Compute current fouling factor for a device using latest t1/t2 readings.
+    Assumes:
+      - t1_in, t1_out, t2_in, t2_out exist as sensor labels
+      - Flow rates, area, U_clean are configured as constants
+    """
+    device = get_object_or_404(Device, id=device_id, customer__user=request.user)
+
+    # helper to get latest value for a given sensor label
+    def latest_value(label):
+        try:
+            sc = SensorConfiguration.objects.get(device=device, sensor_label=label)
+        except SensorConfiguration.DoesNotExist:
+            return None
+        sd = SensorData.objects.filter(device=device, sensor_config=sc).order_by("-created_at").first()
+        return sd.value if sd else None
+
+    t1_in  = latest_value("t1_in")
+    t1_out = latest_value("t1_out")
+    t2_in  = latest_value("t2_in")
+    t2_out = latest_value("t2_out")
+
+    if None in (t1_in, t1_out, t2_in, t2_out):
+        return Response(
+            {"error": "Missing temperature readings (t1_in, t1_out, t2_in, t2_out)"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # Use configured or default design values (mass flow in kg/s etc.)
+    hot_flow_rate = getattr(settings, "DEFAULT_HOT_FLOW_KG_S", 1.0)
+    cold_flow_rate = getattr(settings, "DEFAULT_COLD_FLOW_KG_S", 1.0)
+    heat_transfer_area = getattr(settings, "DEFAULT_HEAT_TRANSFER_AREA", 15.5)
+    U_clean = getattr(settings, "DEFAULT_U_CLEAN", 800.0)
+
+    result = calculate_fouling_factor(
+        hot_flow_rate=hot_flow_rate,
+        cold_flow_rate=cold_flow_rate,
+        hot_inlet_temp=t1_in,
+        hot_outlet_temp=t1_out,
+        cold_inlet_temp=t2_in,
+        cold_outlet_temp=t2_out,
+        heat_transfer_area=heat_transfer_area,
+        U_clean=U_clean,
+    )
+
+    severity_info = assess_fouling_severity(result["fouling_factor"])
+    result.update(severity_info)
+    result["device_id"] = device.id
+    result["device_name"] = device.name
+    result["calculated_at"] = format_ist_timestamp(timezone.now())
+
+    return Response(result)
 
 # ------------------------
 # Helper utilities
@@ -356,6 +434,90 @@ def assess_fouling_severity(fouling_factor):
         }
 
 # ==================== FOULING FACTOR API ENDPOINTS ====================
+from collections import defaultdict
+
+@api_view(["GET"])
+@authentication_classes([SessionAuthentication, TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def device_fouling_history(request, device_id):
+    """
+    Return a time series of fouling factor values computed from historical SensorData.
+    Uses t1_in, t1_out, t2_in, t2_out for each timestamp where all four are present.
+    Query param: ?points=50 (max number of points, default 50)
+    """
+    device = get_object_or_404(Device, id=device_id, customer__user=request.user)
+    try:
+        max_points = int(request.GET.get("points", 50))
+    except ValueError:
+        max_points = 50
+
+    # Fetch recent data for the four key sensors
+    label_list = ["t1_in", "t1_out", "t2_in", "t2_out"]
+    qs = (
+        SensorData.objects
+        .filter(device=device, sensor_config__sensor_label__in=label_list)
+        .select_related("sensor_config")
+        .order_by("-created_at")[: max_points * 4]
+    )
+
+    # Group by timestamp (to the second) -> {timestamp: {label: value}}
+    grouped = defaultdict(dict)
+    for sd in qs:
+        ts = sd.created_at.replace(microsecond=0)
+        grouped[ts][sd.sensor_config.sensor_label] = sd.value
+
+    hot_flow_rate = getattr(settings, "DEFAULT_HOT_FLOW_KG_S", 1.0)
+    cold_flow_rate = getattr(settings, "DEFAULT_COLD_FLOW_KG_S", 1.0)
+    heat_transfer_area = getattr(settings, "DEFAULT_HEAT_TRANSFER_AREA", 10.0)
+    U_clean_design = getattr(settings, "DEFAULT_U_CLEAN", 800.0)
+
+    data_points = []
+
+    # Sort timestamps oldest -> newest for plotting
+    for ts in sorted(grouped.keys()):
+        sample = grouped[ts]
+        if not all(lbl in sample for lbl in label_list):
+            continue
+
+        t1_in  = sample["t1_in"]
+        t1_out = sample["t1_out"]
+        t2_in  = sample["t2_in"]
+        t2_out = sample["t2_out"]
+
+        result = calculate_fouling_factor(
+            hot_flow_rate=hot_flow_rate,
+            cold_flow_rate=cold_flow_rate,
+            hot_inlet_temp=t1_in,
+            hot_outlet_temp=t1_out,
+            cold_inlet_temp=t2_in,
+            cold_outlet_temp=t2_out,
+            heat_transfer_area=heat_transfer_area,
+            U_clean=U_clean_design,
+        )
+        severity_info = assess_fouling_severity(result["fouling_factor"])
+
+        data_points.append({
+            "timestamp": format_ist_timestamp(ts),
+            "fouling_factor": result["fouling_factor"],
+            "U_actual": result["U_actual"],
+            "U_clean": result["U_clean"],
+            "performance_ratio": result["performance_ratio"],
+            "lmtd": result["lmtd"],
+            "severity": severity_info["severity"],
+            "recommendation": severity_info["recommendation"],
+            "color_code": severity_info["color_code"],
+            "risk_level": severity_info["risk_level"],
+        })
+
+        if len(data_points) >= max_points:
+            break
+
+    return Response({
+        "device_id": device.id,
+        "device_name": device.name,
+        "data": data_points,
+    })
+
 
 @api_view(["POST"])
 @authentication_classes([TokenAuthentication])

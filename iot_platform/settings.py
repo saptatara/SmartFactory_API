@@ -29,6 +29,13 @@ THRESHOLD_FOULING = float(os.getenv("THRESHOLD_FOULING", 0.001))
 
 # Optional: cooldown in seconds to avoid repeated alerts
 SMS_ALERT_COOLDOWN_SECONDS = int(os.getenv("SMS_ALERT_COOLDOWN_SECONDS", 1800))
+##############
+#Setting Default values for fouling
+# settings.py
+DEFAULT_HOT_FLOW_KG_S = 1.2
+DEFAULT_COLD_FLOW_KG_S = 1.3
+DEFAULT_HEAT_TRANSFER_AREA = 15.5
+DEFAULT_U_CLEAN = 800
 
 
 
