@@ -279,59 +279,98 @@ def format_ist_timestamp(dt):
 # ==================== FOULING FACTOR CALCULATIONS ====================
 
 def calculate_clean_overall_heat_transfer_coefficient(
-    hot_flow_rate, cold_flow_rate, 
+    hot_flow_rate, cold_flow_rate,
     hot_inlet_temp, hot_outlet_temp,
     cold_inlet_temp, cold_outlet_temp,
     heat_transfer_area
 ):
     """
     Calculate clean overall heat transfer coefficient (U_clean)
-    
+    for PARALLEL-FLOW heat exchanger.
+
     Parameters:
     - hot_flow_rate: Hot fluid flow rate (kg/s)
-    - cold_flow_rate: Cold fluid flow rate (kg/s)  
-    - hot_inlet_temp: Hot fluid inlet temperature (°C)
-    - hot_outlet_temp: Hot fluid outlet temperature (°C)
-    - cold_inlet_temp: Cold fluid inlet temperature (°C)
-    - cold_outlet_temp: Cold fluid outlet temperature (°C)
+    - cold_flow_rate: Cold fluid flow rate (kg/s)
+    - hot_inlet_temp: Hot fluid inlet temperature (°C)  -> e.g. t1_in
+    - hot_outlet_temp: Hot fluid outlet temperature (°C) -> e.g. t1_out
+    - cold_inlet_temp: Cold fluid inlet temperature (°C) -> e.g. t2_in
+    - cold_outlet_temp: Cold fluid outlet temperature (°C)-> e.g. t2_out
     - heat_transfer_area: Heat transfer area (m²)
-    
-    Returns:
-    - U_clean: Clean overall heat transfer coefficient (W/m²·K)
-    - heat_duty: Heat transfer rate (W)
-    - lmtd: Log Mean Temperature Difference (K)
+
+    Returns dict:
+      {
+        'U_clean': U_clean,
+        'heat_duty': heat_duty,
+        'lmtd': lmtd,
+        'heat_duty_hot': heat_duty_hot,
+        'heat_duty_cold': heat_duty_cold,
+      }
     """
-    # Specific heat capacity of water (J/kg·K) - can be parameterized later
-    cp = 4186  # J/kg·K
-    
-    # Calculate heat duty from both streams
+    # Specific heat capacity of water (J/kg·K)
+    cp = 4186.0
+
+    # 1) Heat duty from both sides
     heat_duty_hot = hot_flow_rate * cp * (hot_inlet_temp - hot_outlet_temp)
     heat_duty_cold = cold_flow_rate * cp * (cold_outlet_temp - cold_inlet_temp)
-    
-    # Use average heat duty
-    heat_duty = (heat_duty_hot + heat_duty_cold) / 2
-    
-    # Calculate Log Mean Temperature Difference (LMTD)
-    delta_t1 = hot_inlet_temp - cold_inlet_temp  # Temperature difference at one end
-    delta_t2 = hot_outlet_temp - cold_outlet_temp  # Temperature difference at other end
-    
+
+    # Use average of both sides (you could also choose min(), but average is fine)
+    heat_duty = (heat_duty_hot + heat_duty_cold) / 2.0
+
+    # 2) LMTD for PARALLEL FLOW:
+    #    ΔT1 = Th,in - Tc,in
+    #    ΔT2 = Th,out - Tc,out
+    delta_t1 = hot_inlet_temp - cold_inlet_temp
+    delta_t2 = hot_outlet_temp - cold_outlet_temp
+
+    # Basic safety: ensure positive ΔT for LMTD calculation.
+    # If they are non-positive (sensor issues / transients), we log and coerce.
     if delta_t1 <= 0 or delta_t2 <= 0:
-        raise ValueError("Temperature cross detected - check input temperatures")
-    
-    if delta_t1 == delta_t2:
+        logger.warning(
+            "Non-positive ΔT detected in LMTD calculation. "
+            "Using absolute values. Th_in=%s, Th_out=%s, Tc_in=%s, Tc_out=%s, ΔT1=%s, ΔT2=%s",
+            hot_inlet_temp, hot_outlet_temp, cold_inlet_temp, cold_outlet_temp,
+            delta_t1, delta_t2,
+        )
+        delta_t1 = abs(delta_t1)
+        delta_t2 = abs(delta_t2)
+        if delta_t1 == 0:
+            delta_t1 = 0.1
+        if delta_t2 == 0:
+            delta_t2 = 0.1
+
+    # 3) Compute LMTD
+    if abs(delta_t1 - delta_t2) < 1e-9:
         lmtd = delta_t1
     else:
-        lmtd = (delta_t1 - delta_t2) / math.log(delta_t1 / delta_t2)
-    
-    # Calculate clean overall heat transfer coefficient
-    U_clean = heat_duty / (heat_transfer_area * lmtd)
-    
+        # Guard against weird log arguments
+        ratio = delta_t1 / delta_t2
+        if ratio <= 0:
+            logger.warning(
+                "Invalid LMTD log argument ratio=%s (ΔT1=%s, ΔT2=%s). "
+                "Falling back to arithmetic mean.",
+                ratio, delta_t1, delta_t2,
+            )
+            lmtd = 0.5 * (delta_t1 + delta_t2)
+        else:
+            lmtd = (delta_t1 - delta_t2) / math.log(ratio)
+
+    # 4) Overall heat transfer coefficient
+    if heat_transfer_area <= 0 or lmtd <= 0:
+        logger.warning(
+            "Non-positive area or LMTD in U_clean calculation. "
+            "A=%s, LMTD=%s, heat_duty=%s",
+            heat_transfer_area, lmtd, heat_duty,
+        )
+        U_clean = 0.0
+    else:
+        U_clean = heat_duty / (heat_transfer_area * lmtd)
+
     return {
         'U_clean': U_clean,
         'heat_duty': heat_duty,
         'lmtd': lmtd,
         'heat_duty_hot': heat_duty_hot,
-        'heat_duty_cold': heat_duty_cold
+        'heat_duty_cold': heat_duty_cold,
     }
 
 def calculate_fouling_factor(
