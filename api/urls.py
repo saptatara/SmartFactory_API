@@ -32,7 +32,7 @@ urlpatterns = [
     # ==================== FOULING FACTOR API ====================
     path('fouling/calculate/', views.calculate_fouling_api, name='calculate_fouling'),
     path('fouling/calculate-clean-u/', views.calculate_clean_u_api, name='calculate_clean_u'),
-    path("devices/<int:device_id>/fouling-history/",views.device_fouling_history,name="device_fouling_history")
+    path("devices/<int:device_id>/fouling-history/",views.device_fouling_history,name="device_fouling_history"),
     path("devices/<int:device_id>/fouling-snapshot/", views.device_fouling_snapshot, name="device_fouling_snapshot"),
 
     # ==================== AUTHENTICATION API ====================
