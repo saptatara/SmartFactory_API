@@ -1,91 +1,261 @@
 {% extends "base.html" %}
 {% load static %}
 
+{% block title %}Device {{ device.name }} - Sensor Data{% endblock %}
+
+{% block extra_head %}
+<style>
+    .device-subtitle {
+        color: #9ca3af;
+        font-size: 0.9rem;
+    }
+    .sensor-card {
+        background: radial-gradient(circle at top left, rgba(56,189,248,0.09), transparent 60%),
+                    radial-gradient(circle at bottom right, rgba(52,211,153,0.08), transparent 60%),
+                    #020617;
+        border-radius: 1rem;
+        border: 1px solid #1f2937;
+        box-shadow: 0 18px 30px rgba(0,0,0,0.45);
+    }
+    .sensor-card-header {
+        border-bottom: 1px solid rgba(15,23,42,0.9);
+        background: transparent;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .sensor-label-chip {
+        font-size: 0.75rem;
+        padding: 0.15rem 0.55rem;
+        border-radius: 999px;
+        background: rgba(15,23,42,0.8);
+        border: 1px solid #1f2937;
+        color: #e5e7eb;
+    }
+    .sensor-last-value {
+        font-size: 0.85rem;
+        color: #9ca3af;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<h2>{{ device.name }} - Sensor Data</h2>
+<div class="page-header">
+    <h1>{{ device.name }}</h1>
+    <p class="device-subtitle">
+        Live historical sensor readings (last 50 points per sensor).
+    </p>
+</div>
 
-{% if error %}
-  <p style="color:red">{{ error }}</p>
-{% endif %}
+<div class="row g-4">
+    <!-- LEFT SIDEBAR -->
+    <div class="col-12 col-lg-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0">📋 Device Information</h5>
+            </div>
+            <div class="card-body">
+                <p><strong>ID:</strong> {{ device.id }}</p>
 
-<h3>Recent Data</h3>
-{% if sensor_readings %}
-<ul>
-  {% for reading in sensor_readings %}
-    <li>
-      {{ reading.sensor_config.sensor_label }}: {{ reading.value }}
-      ({{ reading.created_at|date:"M d, Y, h:i a" }})
-    </li>
-  {% endfor %}
-</ul>
-{% else %}
-<p>No recent sensor readings available.</p>
-{% endif %}
+                {% if device.location %}
+                    <p><strong>Location:</strong> {{ device.location }}</p>
+                {% endif %}
 
-<h3>Sensor Graphs</h3>
-{% if sensor_data_json %}
-  {% comment %}
-    We'll generate the chart containers dynamically in JS,
-    so we just need a placeholder div
-  {% endcomment %}
-  <div id="charts-container"></div>
-{% else %}
-<p>No sensor data available to display charts.</p>
-{% endif %}
+                <p><strong>Status:</strong>
+                    {% if device.is_active %}
+                        <span class="badge bg-success">Active</span>
+                    {% else %}
+                        <span class="badge bg-secondary">Inactive</span>
+                    {% endif %}
+                </p>
 
-<!-- JSON data for charts -->
-<script>
-  const sensorData = JSON.parse('{{ sensor_data_json|escapejs }}');
+                <hr>
 
-  const chartsContainer = document.getElementById("charts-container");
+                <p class="small text-muted mb-1">Tips:</p>
+                <ul class="small text-muted mb-3">
+                    <li>Hover over a point to see timestamp & value</li>
+                    <li>Each sensor has its own chart</li>
+                    <li>Use the fouling page for performance KPIs</li>
+                </ul>
 
-  Object.keys(sensorData).forEach(label => {
-    const data = sensorData[label];
-    if (!data || data.length === 0) return;
+                <div class="d-grid gap-2">
+                    <a href="{% url 'customer_dashboard' %}" class="btn btn-sm btn-outline-light">
+                        ⬅️ Back to Dashboard
+                    </a>
+                    <a href="{% url 'fouling_monitoring' device.id %}" class="btn btn-sm btn-warning">
+                        🔥 Fouling Monitoring
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
 
-    // Create canvas dynamically
-    const div = document.createElement("div");
-    div.style.marginBottom = "40px";
+    <!-- SENSOR GRAPHS -->
+    <div class="col-12 col-lg-8">
+        <div id="sensorChartsContainer" class="row g-4">
+            <!-- JS dynamically inserts chart cards here -->
+        </div>
+    </div>
+</div>
+{% endblock %}
 
-    const h4 = document.createElement("h4");
-    h4.innerText = label;
-    div.appendChild(h4);
-
-    const canvas = document.createElement("canvas");
-    canvas.id = `chart-${label}`;
-    canvas.height = 200;
-    div.appendChild(canvas);
-
-    chartsContainer.appendChild(div);
-
-    const ctx = canvas.getContext("2d");
-
-    new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: data.map(d => d.timestamp),
-        datasets: [{
-          label: label,
-          data: data.map(d => d.value),
-          borderColor: 'rgba(75, 192, 192, 1)',
-          backgroundColor: 'rgba(75, 192, 192, 0.2)',
-          fill: false,
-          tension: 0.1,
-          pointRadius: 2
-        }]
-      },
-      options: {
-        responsive: true,
-        plugins: { legend: { display: true } },
-        scales: {
-          x: { display: true, title: { display: true, text: 'Time' } },
-          y: { display: true, title: { display: true, text: 'Value' } }
-        }
-      }
-    });
-  });
-</script>
-
+{% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+    // Sensor data injected from Django view
+    const sensorData = JSON.parse('{{ sensor_data_json|escapejs }}');
+    const container = document.getElementById('sensorChartsContainer');
+
+    // Prettier color palette
+    const chartColors = [
+        { border: 'rgba(56,189,248,1)',   fill: 'rgba(56,189,248,0.18)' },  // cyan
+        { border: 'rgba(34,197,94,1)',    fill: 'rgba(34,197,94,0.18)' },   // green
+        { border: 'rgba(239,68,68,1)',    fill: 'rgba(239,68,68,0.18)' },   // red
+        { border: 'rgba(234,179,8,1)',    fill: 'rgba(234,179,8,0.22)' },   // amber
+        { border: 'rgba(129,140,248,1)',  fill: 'rgba(129,140,248,0.20)' }, // indigo
+        { border: 'rgba(244,114,182,1)',  fill: 'rgba(244,114,182,0.20)' }  // pink
+    ];
+
+    function prettyLabel(label) {
+        // Small cleanup (optional)
+        return label.replace(/_/g, ' ').toUpperCase();
+    }
+
+    function createSensorCard(sensorLabel, readings, index) {
+        const col = document.createElement('div');
+        col.className = 'col-12 col-md-6';
+
+        const card = document.createElement('div');
+        card.className = 'sensor-card';
+
+        const header = document.createElement('div');
+        header.className = 'card-header sensor-card-header';
+
+        const title = document.createElement('div');
+        title.innerHTML = `<h6 class="mb-0">${prettyLabel(sensorLabel)}</h6>`;
+
+        const lastReading = readings[readings.length - 1];
+        const lastValueText = lastReading
+            ? `${lastReading.value} @ ${lastReading.timestamp}`
+            : 'No data';
+
+        const meta = document.createElement('div');
+        meta.innerHTML = `
+            <div class="sensor-label-chip">${sensorLabel}</div>
+            <div class="sensor-last-value mt-1 text-end">
+                <span class="d-block">Last: ${lastValueText}</span>
+            </div>
+        `;
+
+        header.appendChild(title);
+        header.appendChild(meta);
+
+        const body = document.createElement('div');
+        body.className = 'card-body';
+
+        const canvas = document.createElement('canvas');
+        canvas.height = 160;
+        body.appendChild(canvas);
+
+        card.appendChild(header);
+        card.appendChild(body);
+        col.appendChild(card);
+        container.appendChild(col);
+
+        buildChart(canvas, sensorLabel, readings, index);
+    }
+
+    function buildChart(canvas, sensorLabel, readings, index) {
+        const labels = readings.map(r => r.timestamp);
+        const values = readings.map(r => r.value);
+
+        const color = chartColors[index % chartColors.length];
+
+        new Chart(canvas.getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: sensorLabel,
+                    data: values,
+                    borderWidth: 2,
+                    borderColor: color.border,
+                    backgroundColor: color.fill,
+                    pointRadius: 0,
+                    pointHoverRadius: 4,
+                    tension: 0.35,
+                    fill: true,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return ` ${context.parsed.y}`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        title: {
+                            display: false,
+                        },
+                        ticks: {
+                            maxTicksLimit: 5,
+                            color: '#9ca3af',
+                            autoSkip: true,
+                            maxRotation: 0,
+                            minRotation: 0,
+                        },
+                        grid: {
+                            display: false
+                        }
+                    },
+                    y: {
+                        beginAtZero: false,
+                        title: {
+                            display: true,
+                            text: 'Value',
+                            color: '#9ca3af'
+                        },
+                        ticks: {
+                            color: '#e5e7eb'
+                        },
+                        grid: {
+                            color: 'rgba(148,163,184,0.2)'
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Build charts for each sensor label
+    const labels = Object.keys(sensorData).sort();
+
+    if (!labels.length) {
+        container.innerHTML = `
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <p class="text-muted mb-0">No sensor data available for this device yet.</p>
+                    </div>
+                </div>
+            </div>
+        `;
+    } else {
+        labels.forEach((label, index) => {
+            const readings = sensorData[label] || [];
+            if (!readings.length) return;
+            createSensorCard(label, readings, index);
+        });
+    }
+</script>
 {% endblock %}
 

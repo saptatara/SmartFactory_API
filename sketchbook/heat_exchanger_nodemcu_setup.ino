@@ -12,9 +12,9 @@ const char* password = "archsam801";
 //const char* password = "123456789";
 
 // Django API details
-const char* host = "150.241.244.250";  // Your server IP
+const char* host = "150.241.245.67";  // Your server IP
 const int port = 8000;                 // Django server port
-String writeApiKey = "fe3b03fe-08ce-472c-a2a4-4fdd088f9767";  // Platex device write key
+String writeApiKey = "b97fa24b-5ee1-4761-a24f-9b6d78346e60";  // Platex device write key
 String deviceId = "2";                 // Platex device ID
 
 // DS18B20 Sensor Setup
@@ -59,6 +59,14 @@ DeviceAddress tempSensorAddress[4];
 String tempSensorLabels[4] = {"T1In", "T1Out", "T2In", "T2Out"};
 bool tempSensorConnected[4] = {false, false, false, false};
 
+// WiFi Management Variables
+unsigned long lastDataSend = 0;
+const unsigned long SEND_INTERVAL = 60000; // 60 seconds
+bool wifiConnected = false;
+int connectionAttempts = 0;
+unsigned long lastWiFiCheck = 0;
+const unsigned long WIFI_CHECK_INTERVAL = 10000; // Check WiFi every 10 seconds
+
 // Function prototypes
 void testDjangoConnection();
 void sendToDjangoAPI(float t1, float t2, float t3, float t4, float pressure);
@@ -68,10 +76,24 @@ float readDPTSensor();
 int32_t readADS1220();
 void writeRegister(uint8_t reg, uint8_t value);
 void printAllReadings(float t1, float t2, float t3, float t4, float pressure);
+bool connectToWiFi();
+void checkWiFiConnection();
+void monitorConnection();
 
 void setup() {
   Serial.begin(115200);
+  Serial.println("\n🚀 Starting Platex IoT Sensor System...");
+  Serial.println("==========================================");
   
+  // Enhanced WiFi configuration
+  WiFi.mode(WIFI_STA);
+  WiFi.setAutoReconnect(true);
+  WiFi.persistent(false);
+  
+  // Set maximum WiFi power and N-only mode for better stability
+  WiFi.setOutputPower(20.5);
+  WiFi.setPhyMode(WIFI_PHY_MODE_11N);
+
   // Initialize SPI for ADS1220
   SPI.begin();
   SPI.setDataMode(SPI_MODE1);
@@ -88,21 +110,21 @@ void setup() {
   // Initialize temperature sensors
   sensors.begin();
   numberOfTempSensors = sensors.getDeviceCount();
-  Serial.print("Temperature sensors found: ");
+  Serial.print("🔍 Temperature sensors found: ");
   Serial.println(numberOfTempSensors);
 
   // Detect temperature sensors
   for (int i = 0; i < 4; i++) {
     if (sensors.getAddress(tempSensorAddress[i], i)) {
       tempSensorConnected[i] = true;
-      Serial.print("Temp Sensor ");
+      Serial.print("✅ Temp Sensor ");
       Serial.print(i);
       Serial.print(" (");
       Serial.print(tempSensorLabels[i]);
       Serial.println("): Connected");
     } else {
       tempSensorConnected[i] = false;
-      Serial.print("Temp Sensor ");
+      Serial.print("❌ Temp Sensor ");
       Serial.print(i);
       Serial.print(" (");
       Serial.print(tempSensorLabels[i]);
@@ -114,22 +136,85 @@ void setup() {
   initializeADS1220();
   detectDPTSensor();
 
-  // Connect to WiFi
-  Serial.println("Connecting to WiFi...");
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println("\nWiFi connected!");
-  Serial.print("IP address: ");
-  Serial.println(WiFi.localIP());
+  // Connect to WiFi with enhanced handling
+  connectToWiFi();
   
   // Test Django connection
   testDjangoConnection();
+  
+  Serial.println("✅ System initialization complete!");
+  Serial.println("==========================================\n");
+}
+
+bool connectToWiFi() {
+  Serial.println("📡 Connecting to WiFi...");
+  WiFi.disconnect();
+  delay(1000);
+  
+  WiFi.begin(ssid, password);
+  
+  unsigned long startTime = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - startTime < 30000) {
+    delay(500);
+    Serial.print(".");
+  }
+  
+  if (WiFi.status() == WL_CONNECTED) {
+    wifiConnected = true;
+    connectionAttempts = 0;
+    Serial.println("\n✅ WiFi Connected!");
+    Serial.print("📶 IP: ");
+    Serial.println(WiFi.localIP());
+    Serial.print("📶 RSSI: ");
+    Serial.println(WiFi.RSSI());
+    return true;
+  } else {
+    wifiConnected = false;
+    connectionAttempts++;
+    Serial.println("\n❌ WiFi Connection Failed!");
+    Serial.println("💡 Check: Router distance, power supply, credentials");
+    return false;
+  }
+}
+
+void checkWiFiConnection() {
+  if (WiFi.status() != WL_CONNECTED) {
+    wifiConnected = false;
+    Serial.println("⚠️ WiFi Disconnected! Attempting reconnect...");
+    
+    if (connectionAttempts < 3) {
+      connectToWiFi();
+    } else {
+      // After 3 failures, wait longer before retry
+      Serial.println("💤 Waiting 2 minutes before retry...");
+      delay(120000);
+      connectionAttempts = 0;
+      connectToWiFi();
+    }
+  }
+}
+
+void monitorConnection() {
+  static unsigned long lastMonitor = 0;
+  if (millis() - lastMonitor > 30000) { // Every 30 seconds
+    lastMonitor = millis();
+    
+    Serial.println("📊 Connection Monitor:");
+    Serial.print("  WiFi Status: ");
+    Serial.println(WiFi.status() == WL_CONNECTED ? "Connected" : "Disconnected");
+    Serial.print("  RSSI: ");
+    Serial.println(WiFi.RSSI());
+    Serial.print("  Free Heap: ");
+    Serial.println(ESP.getFreeHeap());
+    Serial.print("  Connection Attempts: ");
+    Serial.println(connectionAttempts);
+    Serial.println("-------------------");
+  }
 }
 
 void testDjangoConnection() {
+  if (!wifiConnected) return;
+  
   Serial.println("🧪 Testing Django connection...");
   
   WiFiClient client;
@@ -150,7 +235,7 @@ void testDjangoConnection() {
       if (client.available()) {
         String line = client.readStringUntil('\n');
         if (line.startsWith("HTTP")) {
-          Serial.println("Server response: " + line);
+          Serial.println("📡 Server response: " + line);
           break;
         }
       }
@@ -160,24 +245,42 @@ void testDjangoConnection() {
     Serial.println("❌ Django server is NOT reachable");
   }
 }
+
 void loop() {
-  // Read temperature sensors
-  sensors.requestTemperatures();
-  float t1 = tempSensorConnected[0] ? sensors.getTempCByIndex(0) : -999.0;
-  float t2 = tempSensorConnected[1] ? sensors.getTempCByIndex(1) : -999.0;
-  float t3 = tempSensorConnected[2] ? sensors.getTempCByIndex(2) : -999.0;
-  float t4 = tempSensorConnected[3] ? sensors.getTempCByIndex(3) : -999.0;
-
-  // Read DPT sensor
-  float pressure = readDPTSensor();
-
-  // Print all readings to Serial
-  printAllReadings(t1, t2, t3, t4, pressure);
+  unsigned long currentTime = millis();
   
-  // Send data to Django API
-  sendToDjangoAPI(t1, t2, t3, t4, pressure);
-
-  delay(60000); // Send data every 60 seconds
+  // Check WiFi connection regularly
+  if (currentTime - lastWiFiCheck >= WIFI_CHECK_INTERVAL) {
+    checkWiFiConnection();
+    lastWiFiCheck = currentTime;
+  }
+  
+  // Monitor connection status
+  monitorConnection();
+  
+  // Send data only at the specified interval AND when WiFi is connected
+  if (wifiConnected && (currentTime - lastDataSend >= SEND_INTERVAL)) {
+    
+    // Read sensors
+    sensors.requestTemperatures();
+    float t1 = tempSensorConnected[0] ? sensors.getTempCByIndex(0) : -999.0;
+    float t2 = tempSensorConnected[1] ? sensors.getTempCByIndex(1) : -999.0;
+    float t3 = tempSensorConnected[2] ? sensors.getTempCByIndex(2) : -999.0;
+    float t4 = tempSensorConnected[3] ? sensors.getTempCByIndex(3) : -999.0;
+    float pressure = readDPTSensor();
+    
+    // Print readings
+    printAllReadings(t1, t2, t3, t4, pressure);
+    
+    // Send to API
+    sendToDjangoAPI(t1, t2, t3, t4, pressure);
+    
+    lastDataSend = currentTime;
+    Serial.println("⏰ Next send in 60 seconds...");
+  }
+  
+  // Small delay to prevent watchdog reset
+  delay(100);
 }
 
 void initializeADS1220() {
@@ -198,21 +301,23 @@ void initializeADS1220() {
 }
 
 void detectDPTSensor() {
-  Serial.println("Detecting DPT sensor...");
-  Serial.println("Using 120Ω shunt resistor");
-  Serial.println("Expected voltage range: 0.48V to 2.40V");
+  Serial.println("🔧 Detecting DPT sensor...");
+  Serial.println("📊 Using 120Ω shunt resistor");
+  Serial.println("⚡ Expected: 0.48V (4mA) to 2.40V (20mA)");
   
   float pressure = readDPTSensor();
   
   if (pressure >= -1.0 && pressure <= 12.0) { // Reasonable pressure range
     dptConnected = true;
-    Serial.println(dptLabel + ": CONNECTED");
-    Serial.println("Current reading: " + String(pressure, 2) + " bar");
+    Serial.println("✅ " + dptLabel + ": CONNECTED");
+    Serial.println("📊 Current reading: " + String(pressure, 2) + " bar");
   } else {
     dptConnected = false;
-    Serial.println(dptLabel + ": NOT DETECTED");
-    Serial.println("Please check wiring: DPT Pin2 -> 120Ω -> GND");
-    Serial.println("Measurement points: AIN0 (after 1kΩ) and AIN1 (GND side)");
+    Serial.println("❌ " + dptLabel + ": NOT DETECTED");
+    Serial.println("🔧 Wiring Guide:");
+    Serial.println("   DPT Pin2 → 120Ω → GND");
+    Serial.println("   DPT Pin2 → 1kΩ → AIN0");
+    Serial.println("   GND side of 120Ω → AIN1");
   }
 }
 
@@ -230,9 +335,9 @@ float readDPTSensor() {
   float current = voltage / shuntResistance;
   
   // Debug information
-  Serial.print("ADC: " + String(adcValue) + " | ");
-  Serial.print("Voltage: " + String(voltage, 4) + "V | ");
-  Serial.print("Current: " + String(current * 1000, 1) + "mA | ");
+  Serial.print("📊 ADC: " + String(adcValue) + " | ");
+  Serial.print("⚡ Voltage: " + String(voltage, 4) + "V | ");
+  Serial.print("🔌 Current: " + String(current * 1000, 1) + "mA | ");
   
   // Convert current to pressure (4-20mA = 0-10 bar)
   if (current >= 0.003 && current <= 0.021) { // 3-21mA range with margin
@@ -246,10 +351,10 @@ float readDPTSensor() {
     }
     
     pressure = constrain(pressure, pressureMin, pressureMax);
-    Serial.println("Pressure: " + String(pressure, 2) + " bar");
+    Serial.println("📏 Pressure: " + String(pressure, 2) + " bar");
     return pressure;
   } else {
-    Serial.println("INVALID CURRENT");
+    Serial.println("❌ INVALID CURRENT");
     return -9999.0; // Invalid current reading
   }
 }
@@ -289,48 +394,51 @@ void writeRegister(uint8_t reg, uint8_t value) {
 }
 
 void printAllReadings(float t1, float t2, float t3, float t4, float pressure) {
-  Serial.println("=== SENSOR READINGS ===");
+  Serial.println("📊 === SENSOR READINGS ===");
   
   // Temperature readings
-  Serial.println("Temperature Sensors:");
-  Serial.print(tempSensorLabels[0] + ": ");
-  Serial.println(tempSensorConnected[0] ? String(t1, 1) + "°C" : "NOT CONNECTED");
-  Serial.print(tempSensorLabels[1] + ": ");
-  Serial.println(tempSensorConnected[1] ? String(t2, 1) + "°C" : "NOT CONNECTED");
-  Serial.print(tempSensorLabels[2] + ": ");
-  Serial.println(tempSensorConnected[2] ? String(t3, 1) + "°C" : "NOT CONNECTED");
-  Serial.print(tempSensorLabels[3] + ": ");
-  Serial.println(tempSensorConnected[3] ? String(t4, 1) + "°C" : "NOT CONNECTED");
+  Serial.println("🌡️ Temperature Sensors:");
+  Serial.print("  " + tempSensorLabels[0] + ": ");
+  Serial.println(tempSensorConnected[0] ? String(t1, 1) + "°C" : "❌ NOT CONNECTED");
+  Serial.print("  " + tempSensorLabels[1] + ": ");
+  Serial.println(tempSensorConnected[1] ? String(t2, 1) + "°C" : "❌ NOT CONNECTED");
+  Serial.print("  " + tempSensorLabels[2] + ": ");
+  Serial.println(tempSensorConnected[2] ? String(t3, 1) + "°C" : "❌ NOT CONNECTED");
+  Serial.print("  " + tempSensorLabels[3] + ": ");
+  Serial.println(tempSensorConnected[3] ? String(t4, 1) + "°C" : "❌ NOT CONNECTED");
   
   // DPT reading
-  Serial.println("DPT Sensor (120Ω shunt):");
-  Serial.print(dptLabel + ": ");
+  Serial.println("📏 DPT Sensor:");
+  Serial.print("  " + dptLabel + ": ");
   if (dptConnected && pressure > -9990.0) {
     Serial.println(String(pressure, 2) + " bar");
   } else {
-    Serial.println("NOT DETECTED");
+    Serial.println("❌ NOT DETECTED");
   }
-  Serial.println("======================");
+  Serial.println("📊 ======================");
 }
 
 void sendToDjangoAPI(float t1, float t2, float t3, float t4, float pressure) {
+  if (!wifiConnected) return;
+  
   Serial.println("🔌 === SENDING DATA TO DJANGO ===");
   
   WiFiClient client;
   client.setTimeout(15000);
   
-  Serial.print("Connecting to ");
+  Serial.print("🌐 Connecting to ");
   Serial.print(host);
   Serial.print(":");
   Serial.print(port);
   Serial.println("...");
   
   if (!client.connect(host, port)) {
-    Serial.println("❌ Connection failed");
+    Serial.println("❌ Connection failed to Django server");
+    wifiConnected = false; // Mark as disconnected
     return;
   }
   
-  Serial.println("✅ Connected to server!");
+  Serial.println("✅ Connected to Django server!");
   
   // Prepare JSON data
   String jsonData = "{";
@@ -352,8 +460,7 @@ void sendToDjangoAPI(float t1, float t2, float t3, float t4, float pressure) {
   request += jsonData;
   
   Serial.println("📤 Sending sensor data...");
-  Serial.println("JSON: " + jsonData);
-  Serial.println("API Key: " + writeApiKey);
+  Serial.println("📦 JSON: " + jsonData);
   
   client.print(request);
   Serial.println("✅ Request sent to server!");
@@ -372,7 +479,7 @@ void sendToDjangoAPI(float t1, float t2, float t3, float t4, float pressure) {
       
       if (line.length() > 0) {
         if (!gotResponse) {
-          Serial.println("=== SERVER RESPONSE ===");
+          Serial.println("📡 === SERVER RESPONSE ===");
           gotResponse = true;
         }
         Serial.println("<< " + line);
@@ -396,7 +503,7 @@ void sendToDjangoAPI(float t1, float t2, float t3, float t4, float pressure) {
     }
   } else {
     Serial.println("❌ No response received from server");
-    Serial.println("This might be a network issue - data may still be saved");
+    Serial.println("💡 This might be a network issue - data may still be saved");
   }
   
   client.stop();
