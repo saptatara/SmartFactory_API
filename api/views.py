@@ -1,5 +1,8 @@
 # api/views.py
 from django.shortcuts import render, redirect, get_object_or_404
+import csv
+from datetime import datetime, timedelta
+from django.http import HttpResponse
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import authenticate, login, logout
 from django.utils import timezone
@@ -1029,4 +1032,181 @@ def customer_devices_data(request, dashboard_uuid):
         return JsonResponse({'devices': data})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+#====================================Sensor Report Generation============================
+@api_view(["GET"])
+@authentication_classes([SessionAuthentication, TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def device_fouling_report_csv(request, device_id):
+    """
+    Export fouling history as CSV for a given device and date range.
+
+    Query params:
+      ?start=YYYY-MM-DD
+      ?end=YYYY-MM-DD
+    """
+    device = get_object_or_404(Device, id=device_id, customer__user=request.user)
+
+    # Parse date range
+    try:
+        start_str = request.GET.get("start")
+        end_str = request.GET.get("end")
+        if start_str:
+            start_date = datetime.strptime(start_str, "%Y-%m-%d")
+        else:
+            start_date = timezone.now() - timedelta(days=7)
+        if end_str:
+            end_date = datetime.strptime(end_str, "%Y-%m-%d") + timedelta(days=1)
+        else:
+            end_date = timezone.now() + timedelta(seconds=1)
+        # Make timezone-aware in IST
+        ist = timezone.get_fixed_timezone(330)
+        start_dt = timezone.make_aware(start_date, timezone=ist)
+        end_dt = timezone.make_aware(end_date, timezone=ist)
+    except Exception:
+        return Response({"error": "Invalid date format. Use YYYY-MM-DD."},
+                        status=status.HTTP_400_BAD_REQUEST)
+
+    label_list = ["t1_in", "t1_out", "t2_in", "t2_out"]
+    qs = (
+        SensorData.objects
+        .filter(
+            device=device,
+            sensor_config__sensor_label__in=label_list,
+            created_at__gte=start_dt,
+            created_at__lte=end_dt,
+        )
+        .select_related("sensor_config")
+        .order_by("created_at")
+    )
+
+    grouped = defaultdict(dict)
+    for sd in qs:
+        ts = sd.created_at.replace(microsecond=0)
+        grouped[ts][sd.sensor_config.sensor_label] = sd.value
+
+    hot_flow_rate = getattr(settings, "DEFAULT_HOT_FLOW_KG_S", 1.0)
+    cold_flow_rate = getattr(settings, "DEFAULT_COLD_FLOW_KG_S", 1.0)
+    heat_transfer_area = getattr(settings, "DEFAULT_HEAT_TRANSFER_AREA", 10.0)
+    U_clean_design = getattr(settings, "DEFAULT_U_CLEAN", 800.0)
+
+    # Prepare CSV response
+    filename = f"device_{device.id}_fouling_{start_dt.date()}_to_{end_dt.date()}.csv"
+    response = HttpResponse(content_type="text/csv")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    writer = csv.writer(response)
+
+    # Header
+    writer.writerow([
+        "timestamp_IST",
+        "t1_in", "t1_out", "t2_in", "t2_out",
+        "fouling_factor_m2K_per_W",
+        "severity",
+        "performance_ratio",
+        "U_actual_W_per_m2K",
+        "U_clean_W_per_m2K",
+        "lmtd_K",
+        "heat_duty_W",
+    ])
+
+    # Rows
+    for ts in sorted(grouped.keys()):
+        sample = grouped[ts]
+        if not all(lbl in sample for lbl in label_list):
+            continue
+
+        t1_in = sample["t1_in"]
+        t1_out = sample["t1_out"]
+        t2_in = sample["t2_in"]
+        t2_out = sample["t2_out"]
+
+        result = calculate_fouling_factor(
+            hot_flow_rate=hot_flow_rate,
+            cold_flow_rate=cold_flow_rate,
+            hot_inlet_temp=t1_in,
+            hot_outlet_temp=t1_out,
+            cold_inlet_temp=t2_in,
+            cold_outlet_temp=t2_out,
+            heat_transfer_area=heat_transfer_area,
+            U_clean=U_clean_design,
+        )
+        severity_info = assess_fouling_severity(result["fouling_factor"])
+
+        writer.writerow([
+            format_ist_timestamp(ts),
+            t1_in, t1_out, t2_in, t2_out,
+            result["fouling_factor"],
+            severity_info["severity"],
+            result["performance_ratio"],
+            result["U_actual"],
+            result["U_clean"],
+            result["lmtd"],
+            result["heat_duty"],
+        ])
+
+    return response
+
+
+@api_view(["GET"])
+@authentication_classes([SessionAuthentication, TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def device_sensor_report_csv(request, device_id):
+    """
+    Export raw SensorData for a given device and date range as CSV.
+
+    Query params:
+      ?start=YYYY-MM-DD
+      ?end=YYYY-MM-DD
+    """
+    device = get_object_or_404(Device, id=device_id, customer__user=request.user)
+
+    try:
+        start_str = request.GET.get("start")
+        end_str = request.GET.get("end")
+        if start_str:
+            start_date = datetime.strptime(start_str, "%Y-%m-%d")
+        else:
+            start_date = timezone.now() - timedelta(days=7)
+        if end_str:
+            end_date = datetime.strptime(end_str, "%Y-%m-%d") + timedelta(days=1)
+        else:
+            end_date = timezone.now() + timedelta(seconds=1)
+        ist = timezone.get_fixed_timezone(330)
+        start_dt = timezone.make_aware(start_date, timezone=ist)
+        end_dt = timezone.make_aware(end_date, timezone=ist)
+    except Exception:
+        return Response({"error": "Invalid date format. Use YYYY-MM-DD."},
+                        status=status.HTTP_400_BAD_REQUEST)
+
+    qs = (
+        SensorData.objects
+        .filter(
+            device=device,
+            created_at__gte=start_dt,
+            created_at__lte=end_dt,
+        )
+        .select_related("sensor_config")
+        .order_by("created_at")
+    )
+
+    filename = f"device_{device.id}_sensors_{start_dt.date()}_to_{end_dt.date()}.csv"
+    response = HttpResponse(content_type="text/csv")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    writer = csv.writer(response)
+
+    writer.writerow([
+        "timestamp_IST",
+        "sensor_label",
+        "value",
+        "device_id",
+    ])
+
+    for sd in qs:
+        writer.writerow([
+            format_ist_timestamp(sd.created_at),
+            sd.sensor_config.sensor_label,
+            sd.value,
+            sd.device.id,
+        ])
+
+    return response
 

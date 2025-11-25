@@ -4,74 +4,99 @@
 
 {% block content %}
 <div class="row">
-    <div class="col-md-12">
-        <h2>🔍 Fouling Monitoring - {{ device.name }}</h2>
-        <p class="text-muted">Device: {{ device.name }}{% if device.location %} | Location: {{ device.location }}{% endif %}</p>
-        
-        <div class="alert alert-info">
-            <h5>About Fouling Factor</h5>
-            <p>Fouling factor indicates the thermal resistance caused by deposits on heat transfer surfaces. 
-            Higher values indicate more severe fouling and reduced heat transfer efficiency.</p>
+    <div class="col-12">
+        <div class="page-header">
+            <h1>Fouling Monitoring - {{ device.name }}</h1>
+            <p>Live fouling analysis, history & export for this heat exchanger.</p>
         </div>
-        
-        <div class="row">
-            <div class="col-md-8">
-                <div class="card">
-                    <div class="card-header">
-                        <h5>Fouling Factor Trend</h5>
-                    </div>
-                    <div class="card-body">
-                        <canvas id="foulingChart" height="100"></canvas>
-                        <div id="chartMessage" class="mt-2 text-muted"></div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="col-md-4">
-                <div class="card">
-                    <div class="card-header">
-                        <h5>Current Status</h5>
-                    </div>
-                    <div class="card-body">
-                        <div id="currentStatus">
-                            <p>Loading current fouling status...</p>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="card mt-3">
-                    <div class="card-header">
-                        <h5>Quick Calculator</h5>
-                    </div>
-                    <div class="card-body">
-                        <p>Calculate fouling factor for this device:</p>
-                        <a href="{% url 'fouling_calculator' %}" class="btn btn-primary btn-sm">
-                            Open Calculator
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <div class="card mt-4">
-            <div class="card-header">
-                <h5>Historical Fouling Data</h5>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-md-8">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">📊 Fouling Factor Trend</h5>
+                <small class="text-muted">Computed from t1_in/out & t2_in/out</small>
             </div>
             <div class="card-body">
-                <div id="historicalData">
-                    <p>Loading historical data...</p>
+                <canvas id="foulingChart" height="100"></canvas>
+                <div id="chartMessage" class="mt-2 text-muted small"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <!-- Current Status -->
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">🔥 Current Status</h5>
+                <button class="btn btn-sm btn-outline-light" onclick="showFoulingInfo()">?</button>
+            </div>
+            <div class="card-body">
+                <div id="currentStatus">
+                    <p class="text-muted">Loading current fouling status...</p>
                 </div>
+            </div>
+        </div>
+
+        <!-- Reporting controls -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">📥 Export / Reports</h5>
+            </div>
+            <div class="card-body">
+                <form onsubmit="downloadFoulingCSV(); return false;">
+                    <div class="mb-2">
+                        <label class="form-label small">From date</label>
+                        <input type="date" id="reportStart" class="form-control form-control-sm">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small">To date</label>
+                        <input type="date" id="reportEnd" class="form-control form-control-sm">
+                    </div>
+                    <div class="d-grid gap-2 mt-3">
+                        <button type="submit" class="btn btn-sm btn-primary">
+                            ⬇️ Download Fouling CSV
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="downloadSensorCSV()">
+                            ⬇️ Download Raw Sensor CSV
+                        </button>
+                    </div>
+                    <p class="small text-muted mt-2 mb-0">
+                        CSV exports can be used in Excel, Power BI, or any reporting tool.
+                    </p>
+                </form>
             </div>
         </div>
     </div>
 </div>
 
+<!-- Historical table -->
+<div class="row g-4 mt-1">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">🕒 Historical Fouling Data</h5>
+                <small class="text-muted">Last 50 points from device history API</small>
+            </div>
+            <div class="card-body">
+                <div id="historicalData">
+                    <p class="text-muted">Loading historical fouling data...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-// URL to fetch history for this device (Django will generate correct path)
 const foulingHistoryUrl = "{% url 'device_fouling_history' device.id %}";
+const foulingReportCsvUrl = "{% url 'device_fouling_report_csv' device.id %}";
+const sensorReportCsvUrl = "{% url 'device_sensor_report_csv' device.id %}";
 
-// Initialize chart
 const ctx = document.getElementById('foulingChart').getContext('2d');
 const foulingChart = new Chart(ctx, {
     type: 'line',
@@ -80,8 +105,7 @@ const foulingChart = new Chart(ctx, {
         datasets: [{
             label: 'Fouling Factor (m²·K/W)',
             data: [],
-            borderColor: '#007bff',
-            backgroundColor: 'rgba(0, 123, 255, 0.1)',
+            borderWidth: 2,
             tension: 0.4,
             fill: true
         }]
@@ -106,7 +130,6 @@ const foulingChart = new Chart(ctx, {
     }
 });
 
-// Load fouling history on page load
 document.addEventListener("DOMContentLoaded", function () {
     loadFoulingData();
 });
@@ -117,34 +140,29 @@ function loadFoulingData() {
 
     fetch(foulingHistoryUrl + "?points=50")
         .then(response => {
-            if (!response.ok) {
-                throw new Error("HTTP " + response.status);
-            }
+            if (!response.ok) throw new Error("HTTP " + response.status);
             return response.json();
         })
         .then(payload => {
             const data = payload.data || [];
-
             if (!data.length) {
                 chartMessage.textContent = "Not enough data to compute fouling history yet.";
                 document.getElementById('historicalData').innerHTML =
                     "<p class='text-muted'>No historical fouling records found. " +
-                    "Make sure t1_in, t1_out, t2_in, t2_out are being recorded.</p>";
+                    "Ensure t1_in, t1_out, t2_in, t2_out are being recorded.</p>";
                 document.getElementById('currentStatus').innerHTML =
                     "<p class='text-muted'>No data available to compute current fouling status.</p>";
                 return;
             }
 
-            // Build chart labels & dataset
             const labels = data.map(d => d.timestamp);
-            const foulingValues = data.map(d => d.fouling_factor);
+            const values = data.map(d => d.fouling_factor);
 
             foulingChart.data.labels = labels;
-            foulingChart.data.datasets[0].data = foulingValues;
+            foulingChart.data.datasets[0].data = values;
             foulingChart.update();
             chartMessage.textContent = "";
 
-            // Last point is current status
             const latest = data[data.length - 1];
             updateCurrentStatus(latest);
             updateHistoricalDataTable(data);
@@ -177,9 +195,8 @@ function updateCurrentStatus(point) {
 
 function updateHistoricalDataTable(data) {
     const historicalDiv = document.getElementById('historicalData');
-    
     let tableHTML = `
-        <table class="table table-striped table-sm">
+        <table class="table table-dark table-striped table-sm">
             <thead>
                 <tr>
                     <th>Timestamp</th>
@@ -190,28 +207,23 @@ function updateHistoricalDataTable(data) {
             </thead>
             <tbody>
     `;
-    
     data.forEach(point => {
         const ff = point.fouling_factor;
         const perfPct = (point.performance_ratio * 100).toFixed(1);
         const colorClass = getColorFromSeverity(point.severity);
-
         tableHTML += `
             <tr>
                 <td>${point.timestamp}</td>
                 <td>${ff.toExponential(4)}</td>
                 <td><span class="badge bg-${colorClass}">${point.severity}</span></td>
                 <td>${perfPct}%</td>
-            </tr>
-        `;
+            </tr>`;
     });
-    
     tableHTML += `</tbody></table>`;
     historicalDiv.innerHTML = tableHTML;
 }
 
 function getColorFromSeverity(severity) {
-    // Map your backend severities to Bootstrap badge/alert colors
     const colorMap = {
         'No Fouling': 'success',
         'Minor Fouling': 'info',
@@ -220,6 +232,45 @@ function getColorFromSeverity(severity) {
         'Critical Fouling': 'dark'
     };
     return colorMap[severity] || 'secondary';
+}
+
+function showFoulingInfo() {
+    alert(`Fouling Factor Information:
+
+📊 What is Fouling Factor?
+Fouling factor measures thermal resistance caused by deposits on heat transfer surfaces.
+
+🔍 Why it matters:
+• Higher fouling = reduced heat transfer efficiency
+• Increased energy consumption
+• Potential equipment damage
+
+Typical interpretation (m²·K/W, example bands):
+🟢 No Fouling:         < 0.0001
+🔵 Minor Fouling: 0.0001 - 0.0005
+🟡 Moderate:      0.0005 - 0.001
+🟠 Severe:        0.001  - 0.002
+🔴 Critical:           > 0.002`);
+}
+
+function downloadFoulingCSV() {
+    const start = document.getElementById("reportStart").value;
+    const end = document.getElementById("reportEnd").value;
+    const params = new URLSearchParams();
+    if (start) params.append("start", start);
+    if (end) params.append("end", end);
+    const url = foulingReportCsvUrl + (params.toString() ? "?" + params.toString() : "");
+    window.open(url, "_blank");
+}
+
+function downloadSensorCSV() {
+    const start = document.getElementById("reportStart").value;
+    const end = document.getElementById("reportEnd").value;
+    const params = new URLSearchParams();
+    if (start) params.append("start", start);
+    if (end) params.append("end", end);
+    const url = sensorReportCsvUrl + (params.toString() ? "?" + params.toString() : "");
+    window.open(url, "_blank");
 }
 </script>
 {% endblock %}

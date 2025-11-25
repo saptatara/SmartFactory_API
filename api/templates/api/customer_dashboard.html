@@ -1,92 +1,115 @@
 {% extends "base.html" %}
-{% load static %}
+
+{% block title %}Customer Dashboard - {{ customer.company_name }}{% endblock %}
 
 {% block content %}
-<h2>Welcome, {{ customer.company_name }}</h2>
+<div class="page-header">
+    <h1>Welcome, {{ customer.company_name }}</h1>
+    <p>Your IIoT monitoring & fouling analysis at a glance.</p>
+</div>
 
-<h3>Your Devices</h3>
-{% if devices %}
-  <ul>
-    {% for device in devices %}
-      <li>
-        <strong>{{ device.name }}</strong><br>
-        Location: {{ device.location }}<br>
-        Type: {{ device.device_type }}<br>
-        <a href="{% url 'device_detail_ui' device.id %}">View Details</a>
-      </li>
-    {% endfor %}
-  </ul>
-{% else %}
-  <p>No devices found.</p>
-{% endif %}
+<div class="row g-4">
+    <!-- Quick Links / Info -->
+    <div class="col-12 col-lg-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0">🔗 Quick Links</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled mb-3">
+                    <li class="mb-2">
+                        <a href="{% url 'customer_dashboard' %}">📊 Main Dashboard</a>
+                    </li>
+                    <li class="mb-2">
+                        <a href="{% url 'sensor_configurations' %}">🧩 Sensor Configurations</a>
+                    </li>
+                    <li class="mb-2">
+                        <a href="{% url 'add_sensor_data' %}">➕ Add Sensor Data</a>
+                    </li>
+                    <li class="mb-2">
+                        <a href="{% url 'fouling_calculator' %}">🧮 Fouling Calculator</a>
+                    </li>
+                </ul>
 
-<h3>Recent Data</h3>
-{% if recent_data %}
-  <ul>
-    {% for reading in recent_data %}
-      <li>
-        {{ reading.device_name }} - {{ reading.sensor_label }}: {{ reading.value }} units
-        ({{ reading.timestamp|date:"M d, Y, h:i a" }})
-      </li>
-    {% endfor %}
-  </ul>
-{% else %}
-  <p>No recent sensor data available.</p>
-{% endif %}
+                <hr class="my-3">
 
-<h3>Sensor Graphs</h3>
-{% if sensor_data_json %}
-  {% for sensor_label in sensor_data_json.keys %}
-    <div style="margin-bottom:40px;">
-      <h4>{{ sensor_label }}</h4>
-      <canvas id="chart-{{ sensor_label }}" height="200"></canvas>
+                {% if dashboard_uuid %}
+                    <p class="small text-muted mb-1">
+                        Shareable dashboard URL:
+                    </p>
+                    <code class="small d-block mb-2">
+                        /api/ui/dashboard/{{ dashboard_uuid }}/
+                    </code>
+                {% endif %}
+
+                <p class="small text-muted">
+                    Use the device cards to jump directly to live graphs and fouling monitoring.
+                    For CSV/Report exports, open the Fouling Monitoring page of a device.
+                </p>
+            </div>
+        </div>
     </div>
-  {% endfor %}
-{% else %}
-  <p>No sensor data available to display charts.</p>
-{% endif %}
 
-<!-- JSON data for charts -->
-<script id="sensor-data-json" type="application/json">
-    {{ sensor_data_json|safe }}
-</script>
+    <!-- Device Cards -->
+    <div class="col-12 col-lg-8">
+        {% if devices %}
+            <div class="row g-4">
+                {% for device in devices %}
+                    <div class="col-12 col-md-6">
+                        <div class="card h-100">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h5 class="mb-0">{{ device.name }}</h5>
+                                    <small class="text-muted">ID: {{ device.id }}</small>
+                                </div>
+                                {% if device.is_active %}
+                                    <span class="badge bg-success badge-soft">Active</span>
+                                {% else %}
+                                    <span class="badge bg-secondary badge-soft">Inactive</span>
+                                {% endif %}
+                            </div>
+                            <div class="card-body d-flex flex-column">
+                                <p class="small text-muted">
+                                    {% if device.description %}
+                                        {{ device.description }}
+                                    {% else %}
+                                        Connected IIoT device for process monitoring.
+                                    {% endif %}
+                                </p>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
-  const sensorData = JSON.parse(
-    document.getElementById("sensor-data-json").textContent
-  );
-
-  Object.keys(sensorData).forEach(label => {
-    const data = sensorData[label];
-    if (!data || data.length === 0) return;
-
-    const ctx = document.getElementById(`chart-${label}`).getContext("2d");
-
-    new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: data.map(d => d.timestamp),
-        datasets: [{
-          label: label,
-          data: data.map(d => d.value),
-          borderColor: 'rgba(75, 192, 192, 1)',
-          backgroundColor: 'rgba(75, 192, 192, 0.2)',
-          fill: false,
-          tension: 0.1,
-          pointRadius: 2
-        }]
-      },
-      options: {
-        responsive: true,
-        plugins: { legend: { display: true } },
-        scales: {
-          x: { display: true, title: { display: true, text: 'Time' } },
-          y: { display: true, title: { display: true, text: 'Value' } }
-        }
-      }
-    });
-  });
-</script>
+                                <div class="mt-auto">
+                                    <div class="d-grid gap-2">
+                                        <a href="{% url 'device_detail_ui' device.id %}"
+                                           class="btn btn-sm btn-outline-light">
+                                            📈 View Sensor Graphs
+                                        </a>
+                                        <a href="{% url 'fouling_monitoring' device.id %}"
+                                           class="btn btn-sm btn-warning">
+                                            🔥 Fouling Monitoring & Reports
+                                        </a>
+                                        <a href="{% url 'customer_devices_data' dashboard_uuid=customer.dashboard_url %}"
+                                           class="btn btn-sm btn-outline-secondary">
+                                            💾 API Summary JSON
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="card">
+                <div class="card-body">
+                    <p>No active devices found for this customer.</p>
+                    <p class="small text-muted mb-0">
+                        Once devices are registered and sending data, they will appear here
+                        with links to live graphs and fouling analysis.
+                    </p>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
 {% endblock %}
 
