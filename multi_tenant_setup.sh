@@ -165,11 +165,23 @@ else
 fi
 
 # ---------------------------------------------------------------
-# Step 6: Build and start Docker for tenant
+# Step 6: Build and start Docker for tenant (NO CACHE)
 # ---------------------------------------------------------------
 PROJECT_NAME="${CUSTOMER}_iot"
-echo "🐳 Starting Docker environment for ${CUSTOMER} (project: ${PROJECT_NAME})..."
-docker compose --env-file "${ENV_PATH_TENANT}" -p "${PROJECT_NAME}" -f "${CUSTOMER_DIR}/docker-compose.yml" up -d --build
+echo "🐳 Building Docker images for ${CUSTOMER} (project: ${PROJECT_NAME}) with NO CACHE..."
+
+docker compose \
+  --env-file "${ENV_PATH_TENANT}" \
+  -p "${PROJECT_NAME}" \
+  -f "${CUSTOMER_DIR}/docker-compose.yml" \
+  build --no-cache
+
+echo "🐳 Starting Docker containers for ${CUSTOMER}..."
+docker compose \
+  --env-file "${ENV_PATH_TENANT}" \
+  -p "${PROJECT_NAME}" \
+  -f "${CUSTOMER_DIR}/docker-compose.yml" \
+  up -d
 
 # ---------------------------------------------------------------
 # Step 7: Apply migrations & collect static files (INCLUDES FOULING MIGRATIONS)
