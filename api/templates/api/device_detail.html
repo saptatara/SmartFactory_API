@@ -73,28 +73,11 @@
         width: 100%;
         margin-top: 1rem;
     }
-
-    .export-buttons {
-        display: flex;
-        gap: 0.5rem;
-        margin-top: 1rem;
-    }
     
-    .temperature {
-        color: #ef4444;
-    }
-    
-    .pressure {
-        color: #3b82f6;
-    }
-    
-    .flow {
-        color: #10b981;
-    }
-    
-    .generic {
-        color: #8b5cf6;
-    }
+    .temperature { color: #ef4444; }
+    .pressure { color: #3b82f6; }
+    .flow { color: #10b981; }
+    .generic { color: #8b5cf6; }
 </style>
 {% endblock %}
 
@@ -175,7 +158,6 @@
     <!-- Sensor Charts Grid -->
     <div class="col-12 col-lg-8">
         <div class="row g-4" id="sensor-charts-container">
-            <!-- Charts will be created here by JavaScript -->
             <div class="col-12">
                 <div class="card">
                     <div class="card-body text-center py-5">
@@ -191,69 +173,59 @@
 
 {% block extra_js %}
 <script>
-// Enhanced chart configuration
+// Simple chart configuration
 const chartColors = [
-    { border: 'rgba(59, 130, 246, 1)', fill: 'rgba(59, 130, 246, 0.1)' },
-    { border: 'rgba(16, 185, 129, 1)', fill: 'rgba(16, 185, 129, 0.1)' },
-    { border: 'rgba(245, 158, 11, 1)', fill: 'rgba(245, 158, 11, 0.1)' },
-    { border: 'rgba(239, 68, 68, 1)', fill: 'rgba(239, 68, 68, 0.1)' },
-    { border: 'rgba(139, 92, 246, 1)', fill: 'rgba(139, 92, 246, 0.1)' },
-    { border: 'rgba(14, 165, 233, 1)', fill: 'rgba(14, 165, 233, 0.1)' }
+    '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'
 ];
 
-// Initialize all sensor charts
+// Initialize charts when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
-    console.log("Initializing charts...");
-    
     // Get sensor data from Django template
     const sensorData = {{ sensor_data_json|safe }};
+    const container = document.getElementById('sensor-charts-container');
     
-    console.log("Available sensor data:", Object.keys(sensorData));
-    
-    const sensorChartsContainer = document.getElementById('sensor-charts-container');
-    
-    if (Object.keys(sensorData).length === 0) {
-        // Show no data message
-        sensorChartsContainer.innerHTML = `
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-body text-center py-5">
-                        <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
-                        <h5 class="text-muted">No Sensor Data Available</h5>
-                        <p class="text-muted mb-0">
-                            Sensor data will appear here once the device starts sending measurements.
-                        </p>
-                    </div>
-                </div>
-            </div>
-        `;
+    if (!sensorData || Object.keys(sensorData).length === 0) {
+        showNoDataMessage(container);
         return;
     }
     
-    // Create charts dynamically
-    createChartsDynamically(sensorData, sensorChartsContainer);
+    createCharts(sensorData, container);
 });
 
-function createChartsDynamically(sensorData, container) {
-    // Clear container
+function showNoDataMessage(container) {
+    container.innerHTML = `
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body text-center py-5">
+                    <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">No Sensor Data Available</h5>
+                    <p class="text-muted mb-0">
+                        Sensor data will appear here once the device starts sending measurements.
+                    </p>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function createCharts(sensorData, container) {
+    // Clear loading message
     container.innerHTML = '';
     
-    // Create chart cards for each sensor
+    // Create a chart for each sensor
     Object.keys(sensorData).forEach((sensorLabel, index) => {
         const readings = sensorData[sensorLabel];
         if (!readings || readings.length === 0) return;
         
         const colDiv = document.createElement('div');
-        colDiv.className = 'col-12 col-md-6';
+        colDiv.className = 'col-12 col-md-6 mb-4';
         
         colDiv.innerHTML = `
             <div class="sensor-card">
                 <div class="sensor-card-header">
                     <div>
                         <h6 class="mb-0">${sensorLabel.toUpperCase()}</h6>
-                        <small class="text-muted">
-                            Last: ${readings[0].value}
-                        </small>
+                        <small class="text-muted">Last: ${readings[0].value}</small>
                     </div>
                     <span class="sensor-label-chip">${sensorLabel}</span>
                 </div>
@@ -282,27 +254,18 @@ function createChartsDynamically(sensorData, container) {
         container.appendChild(colDiv);
     });
     
-    // Initialize charts after a short delay to ensure DOM is updated
-    setTimeout(() => initializeCharts(sensorData), 100);
+    // Initialize Chart.js charts
+    setTimeout(() => initializeChartJs(sensorData), 50);
 }
 
-function initializeCharts(sensorData) {
+function initializeChartJs(sensorData) {
     Object.keys(sensorData).forEach((sensorLabel, index) => {
         const readings = sensorData[sensorLabel];
         const canvasId = `chart-${sensorLabel.replace(/[^a-z0-9]/g, '-')}`;
         const canvas = document.getElementById(canvasId);
+        
+        if (!canvas || !readings || readings.length === 0) return;
 
-        if (!canvas) {
-            console.error(`Canvas not found: ${canvasId}`);
-            return;
-        }
-
-        if (!readings || readings.length === 0) {
-            console.warn(`No readings for sensor: ${sensorLabel}`);
-            return;
-        }
-
-        const color = chartColors[index % chartColors.length];
         const labels = readings.map(r => {
             const date = new Date(r.timestamp);
             return date.toLocaleTimeString('en-IN', { 
@@ -311,71 +274,42 @@ function initializeCharts(sensorData) {
                 second: '2-digit'
             });
         });
+        
         const values = readings.map(r => r.value);
 
-        try {
-            new Chart(canvas, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: sensorLabel,
-                        data: values,
-                        borderWidth: 2,
-                        borderColor: color.border,
-                        backgroundColor: color.fill,
-                        pointRadius: 2,
-                        pointHoverRadius: 5,
-                        tension: 0.4,
-                        fill: true,
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            mode: 'index',
-                            intersect: false,
-                            callbacks: {
-                                label: function(context) {
-                                    return ` ${sensorLabel}: ${context.parsed.y}`;
-                                }
-                            }
-                        }
+        new Chart(canvas, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: sensorLabel,
+                    data: values,
+                    borderWidth: 2,
+                    borderColor: chartColors[index % chartColors.length],
+                    backgroundColor: chartColors[index % chartColors.length] + '20',
+                    pointRadius: 2,
+                    tension: 0.4,
+                    fill: true,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { 
+                        display: true,
+                        grid: { display: false },
+                        ticks: { color: '#94a3b8', maxTicksLimit: 5 }
                     },
-                    scales: {
-                        x: {
-                            display: true,
-                            grid: { 
-                                display: false,
-                                color: 'rgba(148, 163, 184, 0.1)'
-                            },
-                            ticks: {
-                                color: 'rgba(148, 163, 184, 0.8)',
-                                maxTicksLimit: 5
-                            }
-                        },
-                        y: {
-                            beginAtZero: false,
-                            grid: {
-                                color: 'rgba(148, 163, 184, 0.1)'
-                            },
-                            ticks: {
-                                color: 'rgba(148, 163, 184, 0.8)'
-                            }
-                        }
-                    },
-                    interaction: {
-                        intersect: false,
-                        mode: 'index'
+                    y: {
+                        display: true,
+                        grid: { color: 'rgba(148, 163, 184, 0.1)' },
+                        ticks: { color: '#94a3b8' }
                     }
                 }
-            });
-        } catch (error) {
-            console.error(`❌ Error creating chart for ${sensorLabel}:`, error);
-        }
+            }
+        });
     });
 }
 
@@ -387,9 +321,7 @@ function getSensorTypeClass(sensorLabel) {
     return 'generic';
 }
 
-// Auto-refresh data every 30 seconds
-setTimeout(() => {
-    window.location.reload();
-}, 30000);
+// Auto-refresh every 30 seconds
+setTimeout(() => window.location.reload(), 30000);
 </script>
 {% endblock %}
