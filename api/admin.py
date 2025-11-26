@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.utils.html import format_html
 from .models import (
     Customer,
     Device,
@@ -35,10 +36,14 @@ class CustomerSpecificAdmin(admin.ModelAdmin):
 
 @admin.register(Customer)
 class CustomerAdmin(admin.ModelAdmin):
-    list_display = ["company_name", "user", "contact_email", "phone_number", "created_at"]
+    list_display = ["company_name", "user", "contact_email", "phone_number", "created_at", "dashboard_link"]
     list_filter = ["created_at", "receive_sms_alerts", "receive_email_alerts"]
     search_fields = ["company_name", "contact_email"]
     readonly_fields = ["dashboard_url"]
+    
+    def dashboard_link(self, obj):
+        return format_html('<a href="/api/ui/dashboard/{}/" target="_blank" class="button">View Dashboard</a>', obj.dashboard_url)
+    dashboard_link.short_description = "Dashboard"
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
@@ -63,20 +68,41 @@ class DeviceAdmin(CustomerSpecificAdmin):
         "is_active",
         "created_at",
         "api_keys",
+        "actions",
     ]
     list_filter = ["is_active", "device_type", "created_at", "customer"]
     search_fields = ["name", "location"]
     readonly_fields = ["write_api_key", "read_api_key"]
 
     def api_keys(self, obj):
-        return f"Write: {obj.write_api_key}\nRead: {obj.read_api_key}"
-
+        return format_html(
+            '<div style="font-family: monospace; font-size: 11px;">'
+            '<strong>Write:</strong> {}<br>'
+            '<strong>Read:</strong> {}</div>',
+            obj.write_api_key,
+            obj.read_api_key
+        )
     api_keys.short_description = "API Keys"
+
+    def actions(self, obj):
+        return format_html(
+            '<div class="action-buttons">'
+            '<a href="/api/ui/device/{}/" class="button" target="_blank">📊 View</a> '
+            '<a href="/api/ui/device/{}/fouling/" class="button" target="_blank">🔥 Fouling</a>'
+            '</div>',
+            obj.id, obj.id
+        )
+    actions.short_description = "Actions"
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         if db_field.name == "customer" and not request.user.is_superuser:
             kwargs["queryset"] = Customer.objects.filter(user=request.user)
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+    class Media:
+        css = {
+            'all': ('admin/css/custom_admin.css',)
+        }
 
 
 @admin.register(SensorType)
@@ -106,11 +132,15 @@ class SensorConfigurationAdmin(CustomerSpecificAdmin):
 
 @admin.register(SensorData)
 class SensorDataAdmin(CustomerSpecificAdmin):
-    list_display = ["device", "sensor_config", "value", "created_at"]
+    list_display = ["device", "sensor_config", "value", "unit_display", "created_at"]
     list_filter = ["device", "sensor_config__sensor_type", "created_at"]
     search_fields = ["device__name", "sensor_config__sensor_label"]
     readonly_fields = ["created_at"]
     date_hierarchy = "created_at"
+    
+    def unit_display(self, obj):
+        return obj.sensor_config.sensor_type.unit
+    unit_display.short_description = "Unit"
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)

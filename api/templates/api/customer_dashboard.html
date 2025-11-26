@@ -1,96 +1,262 @@
 {% extends "base.html" %}
 
-{% block title %}Customer Dashboard - {{ customer.company_name }}{% endblock %}
+{% block title %}Industrial Dashboard - {{ customer.company_name }}{% endblock %}
+
+{% block extra_head %}
+<style>
+    .stats-card {
+        text-align: center;
+        padding: 1.5rem;
+    }
+    
+    .stats-icon {
+        font-size: 2.5rem;
+        margin-bottom: 1rem;
+        opacity: 0.9;
+    }
+    
+    .stats-value {
+        font-size: 2rem;
+        font-weight: 800;
+        margin-bottom: 0.5rem;
+    }
+    
+    .stats-label {
+        color: var(--text-muted);
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    
+    .device-card {
+        transition: all 0.3s ease;
+        border-left: 4px solid var(--accent-primary);
+    }
+    
+    .device-card:hover {
+        border-left-color: var(--accent-success);
+        transform: translateX(5px);
+    }
+    
+    .quick-actions {
+        display: grid;
+        gap: 0.75rem;
+    }
+    
+    .action-btn {
+        display: flex;
+        align-items: center;
+        padding: 0.75rem 1rem;
+        background: rgba(59, 130, 246, 0.1);
+        border: 1px solid var(--border-subtle);
+        border-radius: 0.75rem;
+        color: var(--text-main);
+        text-decoration: none;
+        transition: all 0.3s ease;
+    }
+    
+    .action-btn:hover {
+        background: rgba(59, 130, 246, 0.2);
+        border-color: var(--accent-primary);
+        transform: translateY(-2px);
+    }
+    
+    .action-btn i {
+        font-size: 1.2rem;
+        margin-right: 0.75rem;
+        width: 20px;
+        text-align: center;
+    }
+    
+    .sensor-badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.5rem;
+        background: rgba(30, 41, 59, 0.8);
+        border: 1px solid var(--border-subtle);
+    }
+</style>
+{% endblock %}
 
 {% block content %}
 <div class="page-header">
-    <h1>Welcome, {{ customer.company_name }}</h1>
-    <p>Your IIoT monitoring & fouling analysis at a glance.</p>
+    <h1>Industrial IoT Dashboard</h1>
+    <p>Real-time monitoring and analytics for {{ customer.company_name }}</p>
+</div>
+
+<!-- Statistics Overview -->
+<div class="row g-4 mb-5">
+    <div class="col-6 col-md-3">
+        <div class="card card-gradient-primary stats-card">
+            <div class="stats-icon text-primary">
+                <i class="fas fa-microchip"></i>
+            </div>
+            <div class="stats-value">{{ devices|length }}</div>
+            <div class="stats-label">Active Devices</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card card-gradient-success stats-card">
+            <div class="stats-icon text-success">
+                <i class="fas fa-sensor"></i>
+            </div>
+            <div class="stats-value">{{ total_sensors }}</div>
+            <div class="stats-label">Total Sensors</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card card-gradient-warning stats-card">
+            <div class="stats-icon text-warning">
+                <i class="fas fa-fire"></i>
+            </div>
+            <div class="stats-value">{{ critical_alerts }}</div>
+            <div class="stats-label">Critical Alerts</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card card-gradient-primary stats-card">
+            <div class="stats-icon text-info">
+                <i class="fas fa-chart-line"></i>
+            </div>
+            <div class="stats-value">{{ performance_avg }}%</div>
+            <div class="stats-label">Avg Performance</div>
+        </div>
+    </div>
 </div>
 
 <div class="row g-4">
-    <!-- Quick Links / Info -->
+    <!-- Quick Actions & Info -->
     <div class="col-12 col-lg-4">
         <div class="card h-100">
-            <div class="card-header">
-                <h5 class="mb-0">🔗 Quick Links</h5>
+            <div class="card-header d-flex align-items-center">
+                <i class="fas fa-rocket me-2"></i>
+                <h5 class="mb-0">Quick Actions</h5>
             </div>
             <div class="card-body">
-                <ul class="list-unstyled mb-3">
-                    <li class="mb-2">
-                        <a href="{% url 'customer_dashboard' %}">📊 Main Dashboard</a>
-                    </li>
-                    <li class="mb-2">
-                        <a href="{% url 'sensor_configurations' %}">🧩 Sensor Configurations</a>
-                    </li>
-                    <li class="mb-2">
-                        <a href="{% url 'add_sensor_data' %}">➕ Add Sensor Data</a>
-                    </li>
-                    <li class="mb-2">
-                        <a href="{% url 'fouling_calculator' %}">🧮 Fouling Calculator</a>
-                    </li>
-                </ul>
+                <div class="quick-actions">
+                    <a href="{% url 'customer_dashboard' %}" class="action-btn">
+                        <i class="fas fa-tachometer-alt"></i>
+                        <span>Live Dashboard</span>
+                    </a>
+                    <a href="{% url 'sensor_configurations' %}" class="action-btn">
+                        <i class="fas fa-sliders-h"></i>
+                        <span>Sensor Management</span>
+                    </a>
+                    <a href="{% url 'add_sensor_data' %}" class="action-btn">
+                        <i class="fas fa-plus-circle"></i>
+                        <span>Add Sensor Data</span>
+                    </a>
+                    <a href="{% url 'fouling_calculator' %}" class="action-btn">
+                        <i class="fas fa-calculator"></i>
+                        <span>Fouling Calculator</span>
+                    </a>
+                    <a href="#" class="action-btn" onclick="showReportsModal()">
+                        <i class="fas fa-file-export"></i>
+                        <span>Generate Reports</span>
+                    </a>
+                </div>
 
-                <hr class="my-3">
+                <hr class="my-4">
 
+                <!-- Dashboard Sharing -->
                 {% if dashboard_uuid %}
-                    <p class="small text-muted mb-1">
-                        Shareable dashboard URL:
-                    </p>
-                    <code class="small d-block mb-2">
-                        /api/ui/dashboard/{{ dashboard_uuid }}/
-                    </code>
+                <div class="mb-3">
+                    <label class="form-label small text-muted mb-2">Shareable Dashboard</label>
+                    <div class="input-group input-group-sm">
+                        <input type="text" class="form-control" value="{{ request.scheme }}://{{ request.get_host }}/api/ui/dashboard/{{ dashboard_uuid }}/" 
+                               id="dashboardUrl" readonly>
+                        <button class="btn btn-outline-secondary" type="button" onclick="copyDashboardUrl()">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+                </div>
                 {% endif %}
 
-                <p class="small text-muted">
-                    Use the device cards to jump directly to live graphs and fouling monitoring.
-                    For CSV/Report exports, open the Fouling Monitoring page of a device.
+                <p class="small text-muted mb-0">
+                    <i class="fas fa-info-circle me-1"></i>
+                    Monitor your industrial assets in real-time with advanced analytics and predictive maintenance insights.
                 </p>
             </div>
         </div>
     </div>
 
-    <!-- Device Cards -->
+    <!-- Device Grid -->
     <div class="col-12 col-lg-8">
         {% if devices %}
             <div class="row g-4">
                 {% for device in devices %}
                     <div class="col-12 col-md-6">
-                        <div class="card h-100">
+                        <div class="card device-card h-100">
                             <div class="card-header d-flex justify-content-between align-items-center">
-                                <div>
-                                    <h5 class="mb-0">{{ device.name }}</h5>
-                                    <small class="text-muted">ID: {{ device.id }}</small>
+                                <div class="d-flex align-items-center">
+                                    <span class="status-indicator {% if device.is_active %}status-active{% else %}status-inactive{% endif %}"></span>
+                                    <div>
+                                        <h6 class="mb-0">{{ device.name }}</h6>
+                                        <small class="text-muted">ID: {{ device.id }}</small>
+                                    </div>
                                 </div>
                                 {% if device.is_active %}
-                                    <span class="badge bg-success badge-soft">Active</span>
+                                    <span class="badge bg-success badge-soft">
+                                        <i class="fas fa-check me-1"></i>Active
+                                    </span>
                                 {% else %}
-                                    <span class="badge bg-secondary badge-soft">Inactive</span>
+                                    <span class="badge bg-secondary badge-soft">
+                                        <i class="fas fa-pause me-1"></i>Inactive
+                                    </span>
                                 {% endif %}
                             </div>
+                            
                             <div class="card-body d-flex flex-column">
-                                <p class="small text-muted">
-                                    {% if device.description %}
-                                        {{ device.description }}
-                                    {% else %}
-                                        Connected IIoT device for process monitoring.
+                                <!-- Device Info -->
+                                <div class="mb-3">
+                                    {% if device.location %}
+                                        <p class="small mb-2">
+                                            <i class="fas fa-map-marker-alt me-2 text-muted"></i>
+                                            {{ device.location }}
+                                        </p>
                                     {% endif %}
-                                </p>
+                                    {% if device.device_type %}
+                                        <p class="small mb-2">
+                                            <i class="fas fa-cog me-2 text-muted"></i>
+                                            {{ device.device_type.name }}
+                                        </p>
+                                    {% endif %}
+                                </div>
 
+                                <!-- Sensor Badges -->
+                                <div class="mb-3">
+                                    <small class="text-muted d-block mb-2">Active Sensors:</small>
+                                    <div class="d-flex flex-wrap gap-1">
+                                        {% for config in device.sensor_configs.all|slice:":4" %}
+                                            <span class="sensor-badge">{{ config.sensor_label }}</span>
+                                        {% endfor %}
+                                        {% if device.sensor_configs.count > 4 %}
+                                            <span class="sensor-badge">+{{ device.sensor_configs.count|add:"-4" }} more</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+
+                                <!-- Action Buttons -->
                                 <div class="mt-auto">
                                     <div class="d-grid gap-2">
                                         <a href="{% url 'device_detail_ui' device.id %}"
-                                           class="btn btn-sm btn-outline-light">
-                                            📈 View Sensor Graphs
+                                           class="btn btn-sm btn-outline-primary">
+                                            <i class="fas fa-chart-line me-1"></i>Live Graphs
                                         </a>
                                         <a href="{% url 'fouling_monitoring' device.id %}"
                                            class="btn btn-sm btn-warning">
-                                            🔥 Fouling Monitoring & Reports
+                                            <i class="fas fa-fire me-1"></i>Fouling Analysis
                                         </a>
-                                        <a href="{% url 'customer_devices_data' dashboard_uuid=customer.dashboard_url %}"
-                                           class="btn btn-sm btn-outline-secondary">
-                                            💾 API Summary JSON
-                                        </a>
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            <a href="{% url 'device_fouling_report_csv' device.id %}" 
+                                               class="btn btn-outline-secondary">
+                                                <i class="fas fa-file-csv me-1"></i>Fouling CSV
+                                            </a>
+                                            <a href="{% url 'device_sensor_report_csv' device.id %}" 
+                                               class="btn btn-outline-secondary">
+                                                <i class="fas fa-file-csv me-1"></i>Sensor CSV
+                                            </a>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -100,16 +266,92 @@
             </div>
         {% else %}
             <div class="card">
-                <div class="card-body">
-                    <p>No active devices found for this customer.</p>
-                    <p class="small text-muted mb-0">
-                        Once devices are registered and sending data, they will appear here
-                        with links to live graphs and fouling analysis.
+                <div class="card-body text-center py-5">
+                    <i class="fas fa-microchip fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">No Active Devices</h5>
+                    <p class="text-muted mb-0">
+                        Once devices are registered and sending data, they will appear here with real-time analytics.
                     </p>
                 </div>
             </div>
         {% endif %}
     </div>
 </div>
+
+<!-- Reports Modal -->
+<div class="modal fade" id="reportsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content bg-dark border border-secondary">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-file-export me-2"></i>Generate Reports</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-3">
+                    {% for device in devices %}
+                    <div class="col-12 col-md-6">
+                        <div class="card bg-secondary border-secondary">
+                            <div class="card-body">
+                                <h6 class="card-title">{{ device.name }}</h6>
+                                <div class="btn-group w-100" role="group">
+                                    <a href="{% url 'device_fouling_report_csv' device.id %}" 
+                                       class="btn btn-outline-primary btn-sm">
+                                        <i class="fas fa-fire me-1"></i>Fouling
+                                    </a>
+                                    <a href="{% url 'device_sensor_report_csv' device.id %}" 
+                                       class="btn btn-outline-success btn-sm">
+                                        <i class="fas fa-sensor me-1"></i>Sensor
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
+{% block extra_js %}
+<script>
+function copyDashboardUrl() {
+    const urlInput = document.getElementById('dashboardUrl');
+    urlInput.select();
+    document.execCommand('copy');
+    
+    // Show feedback
+    const btn = event.target;
+    const originalHtml = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-check"></i>';
+    setTimeout(() => {
+        btn.innerHTML = originalHtml;
+    }, 2000);
+}
+
+function showReportsModal() {
+    const modal = new bootstrap.Modal(document.getElementById('reportsModal'));
+    modal.show();
+}
+
+// Add view transitions for better UX
+document.addEventListener('DOMContentLoaded', function() {
+    // Add loading states to buttons
+    document.querySelectorAll('a.btn').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            if (!this.href || this.href === '#') return;
+            
+            const originalText = this.innerHTML;
+            this.innerHTML = '<span class="loading-spinner me-2"></span>Loading...';
+            this.disabled = true;
+            
+            setTimeout(() => {
+                this.innerHTML = originalText;
+                this.disabled = false;
+            }, 2000);
+        });
+    });
+});
+</script>
+{% endblock %}

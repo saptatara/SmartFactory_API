@@ -72,6 +72,16 @@ path(
     name="device_fouling_report_csv",
 ),
 path(
+        "devices/<int:device_id>/fouling-report-csv/",
+        views.device_fouling_report_csv,
+        name="device_fouling_report_csv",
+    ),
+path(
+        "devices/<int:device_id>/sensor-report-csv/",
+        views.device_sensor_report_csv,
+        name="device_sensor_report_csv",
+},
+path(
     "devices/<int:device_id>/sensor-report-csv/",
     views.device_sensor_report_csv,
     name="device_sensor_report_csv",

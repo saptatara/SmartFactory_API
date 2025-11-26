@@ -19,6 +19,8 @@ from .models import (
 from .serializers import DeviceSerializer, SensorDataSerializer, IoTDataSerializer
 from .forms import SensorDataForm
 from rest_framework.authtoken.models import Token
+from django.db.models import Q
+from datetime import datetime, timedelta
 import json
 
 
@@ -726,15 +728,31 @@ def customer_logout(request):
 
 @login_required
 def customer_dashboard(request):
-    customer = get_object_or_404(Customer, user=request.user)
-    devices = Device.objects.filter(customer=customer, is_active=True)
-    # Use helper to fetch latest 5 records but in chronological order (oldest->newest)
-    recent_data = latest_chronological(SensorData.objects.filter(device__in=devices), 5)
-
-    return render(request, "api/customer_dashboard.html", {
-        "customer": customer, "devices": devices, "recent_data": recent_data
-    })
-
+    """Enhanced customer dashboard with professional stats"""
+    if not request.user.is_authenticated:
+        return redirect('customer_login')
+    
+    try:
+        customer = Customer.objects.get(user=request.user)
+        devices = Device.objects.filter(customer=customer, is_active=True)
+        
+        # Get enhanced dashboard statistics
+        stats = get_dashboard_stats(customer)
+        
+    except Customer.DoesNotExist:
+        messages.error(request, "Customer profile not found.")
+        return redirect('customer_login')
+    
+    context = {
+        'customer': customer,
+        'devices': devices,
+        'dashboard_uuid': customer.dashboard_url,
+        'total_sensors': stats['total_sensors'],
+        'critical_alerts': stats['critical_alerts'],
+        'performance_avg': stats['performance_avg'],
+    }
+    
+    return render(request, 'customer_dashboard.html', context)
 @login_required
 def customer_dashboard_uuid(request, dashboard_uuid):
     customer = get_object_or_404(Customer, dashboard_url=dashboard_uuid, user=request.user)
@@ -1037,176 +1055,152 @@ def customer_devices_data(request, dashboard_uuid):
 @authentication_classes([SessionAuthentication, TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def device_fouling_report_csv(request, device_id):
-    """
-    Export fouling history as CSV for a given device and date range.
-
-    Query params:
-      ?start=YYYY-MM-DD
-      ?end=YYYY-MM-DD
-    """
-    device = get_object_or_404(Device, id=device_id, customer__user=request.user)
-
-    # Parse date range
+    """Generate comprehensive fouling data CSV report with enhanced formatting"""
     try:
-        start_str = request.GET.get("start")
-        end_str = request.GET.get("end")
-        if start_str:
-            start_date = datetime.strptime(start_str, "%Y-%m-%d")
-        else:
-            start_date = timezone.now() - timedelta(days=7)
-        if end_str:
-            end_date = datetime.strptime(end_str, "%Y-%m-%d") + timedelta(days=1)
-        else:
-            end_date = timezone.now() + timedelta(seconds=1)
-        # Make timezone-aware in IST
-        ist = timezone.get_fixed_timezone(330)
-        start_dt = timezone.make_aware(start_date, timezone=ist)
-        end_dt = timezone.make_aware(end_date, timezone=ist)
-    except Exception:
-        return Response({"error": "Invalid date format. Use YYYY-MM-DD."},
-                        status=status.HTTP_400_BAD_REQUEST)
+        device = Device.objects.get(id=device_id, customer__user=request.user)
+    except Device.DoesNotExist:
+        return HttpResponse("Device not found", status=404)
 
-    label_list = ["t1_in", "t1_out", "t2_in", "t2_out"]
-    qs = (
-        SensorData.objects
-        .filter(
-            device=device,
-            sensor_config__sensor_label__in=label_list,
-            created_at__gte=start_dt,
-            created_at__lte=end_dt,
-        )
-        .select_related("sensor_config")
-        .order_by("created_at")
-    )
+    # Date range filtering
+    start_date = request.GET.get('start')
+    end_date = request.GET.get('end')
+    
+    fouling_data = FoulingData.objects.filter(device=device)
+    
+    if start_date:
+        try:
+            start_date = datetime.strptime(start_date, '%Y-%m-%d')
+            fouling_data = fouling_data.filter(calculated_at__date__gte=start_date)
+        except ValueError:
+            pass
+            
+    if end_date:
+        try:
+            end_date = datetime.strptime(end_date, '%Y-%m-%d')
+            fouling_data = fouling_data.filter(calculated_at__date__lte=end_date)
+        except ValueError:
+            pass
 
-    grouped = defaultdict(dict)
-    for sd in qs:
-        ts = sd.created_at.replace(microsecond=0)
-        grouped[ts][sd.sensor_config.sensor_label] = sd.value
+    fouling_data = fouling_data.order_by('-calculated_at')
 
-    hot_flow_rate = getattr(settings, "DEFAULT_HOT_FLOW_KG_S", 1.0)
-    cold_flow_rate = getattr(settings, "DEFAULT_COLD_FLOW_KG_S", 1.0)
-    heat_transfer_area = getattr(settings, "DEFAULT_HEAT_TRANSFER_AREA", 10.0)
-    U_clean_design = getattr(settings, "DEFAULT_U_CLEAN", 800.0)
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="fouling_report_{device.name}_{timezone.now().strftime("%Y%m%d_%H%M%S")}.csv"'
 
-    # Prepare CSV response
-    filename = f"device_{device.id}_fouling_{start_dt.date()}_to_{end_dt.date()}.csv"
-    response = HttpResponse(content_type="text/csv")
-    response["Content-Disposition"] = f'attachment; filename="{filename}"'
     writer = csv.writer(response)
-
-    # Header
+    
+    # Enhanced header with better organization
     writer.writerow([
-        "timestamp_IST",
-        "t1_in", "t1_out", "t2_in", "t2_out",
-        "fouling_factor_m2K_per_W",
-        "severity",
-        "performance_ratio",
-        "U_actual_W_per_m2K",
-        "U_clean_W_per_m2K",
-        "lmtd_K",
-        "heat_duty_W",
+        'TIMESTAMP', 'DEVICE_NAME', 'LOCATION', 
+        'FOULING_FACTOR_M2K_W', 'U_ACTUAL_W_M2K', 'U_CLEAN_W_M2K', 
+        'PERFORMANCE_RATIO_PERCENT', 'HEAT_DUTY_W', 'LMTD_K', 
+        'SEVERITY_LEVEL', 'RISK_LEVEL', 'MAINTENANCE_RECOMMENDATION'
     ])
 
-    # Rows
-    for ts in sorted(grouped.keys()):
-        sample = grouped[ts]
-        if not all(lbl in sample for lbl in label_list):
-            continue
-
-        t1_in = sample["t1_in"]
-        t1_out = sample["t1_out"]
-        t2_in = sample["t2_in"]
-        t2_out = sample["t2_out"]
-
-        result = calculate_fouling_factor(
-            hot_flow_rate=hot_flow_rate,
-            cold_flow_rate=cold_flow_rate,
-            hot_inlet_temp=t1_in,
-            hot_outlet_temp=t1_out,
-            cold_inlet_temp=t2_in,
-            cold_outlet_temp=t2_out,
-            heat_transfer_area=heat_transfer_area,
-            U_clean=U_clean_design,
-        )
-        severity_info = assess_fouling_severity(result["fouling_factor"])
-
+    for data in fouling_data:
         writer.writerow([
-            format_ist_timestamp(ts),
-            t1_in, t1_out, t2_in, t2_out,
-            result["fouling_factor"],
-            severity_info["severity"],
-            result["performance_ratio"],
-            result["U_actual"],
-            result["U_clean"],
-            result["lmtd"],
-            result["heat_duty"],
+            data.calculated_at.strftime("%Y-%m-%d %H:%M:%S"),
+            device.name,
+            device.location or 'N/A',
+            f"{data.fouling_factor:.8f}",  # Higher precision for fouling factor
+            f"{data.u_actual:.2f}",
+            f"{data.u_clean:.2f}",
+            f"{(data.performance_ratio * 100):.2f}",
+            f"{data.heat_duty:.2f}",
+            f"{data.lmtd:.2f}",
+            data.severity.upper(),
+            data.risk_level.upper(),
+            data.recommendation
         ])
 
     return response
-
 
 @api_view(["GET"])
 @authentication_classes([SessionAuthentication, TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def device_sensor_report_csv(request, device_id):
-    """
-    Export raw SensorData for a given device and date range as CSV.
-
-    Query params:
-      ?start=YYYY-MM-DD
-      ?end=YYYY-MM-DD
-    """
-    device = get_object_or_404(Device, id=device_id, customer__user=request.user)
-
+    """Generate comprehensive sensor data CSV report with enhanced formatting"""
     try:
-        start_str = request.GET.get("start")
-        end_str = request.GET.get("end")
-        if start_str:
-            start_date = datetime.strptime(start_str, "%Y-%m-%d")
-        else:
-            start_date = timezone.now() - timedelta(days=7)
-        if end_str:
-            end_date = datetime.strptime(end_str, "%Y-%m-%d") + timedelta(days=1)
-        else:
-            end_date = timezone.now() + timedelta(seconds=1)
-        ist = timezone.get_fixed_timezone(330)
-        start_dt = timezone.make_aware(start_date, timezone=ist)
-        end_dt = timezone.make_aware(end_date, timezone=ist)
-    except Exception:
-        return Response({"error": "Invalid date format. Use YYYY-MM-DD."},
-                        status=status.HTTP_400_BAD_REQUEST)
+        device = Device.objects.get(id=device_id, customer__user=request.user)
+    except Device.DoesNotExist:
+        return HttpResponse("Device not found", status=404)
 
-    qs = (
-        SensorData.objects
-        .filter(
-            device=device,
-            created_at__gte=start_dt,
-            created_at__lte=end_dt,
-        )
-        .select_related("sensor_config")
-        .order_by("created_at")
-    )
+    # Date range filtering
+    start_date = request.GET.get('start')
+    end_date = request.GET.get('end')
+    
+    sensor_data = SensorData.objects.filter(device=device)
+    
+    if start_date:
+        try:
+            start_date = datetime.strptime(start_date, '%Y-%m-%d')
+            sensor_data = sensor_data.filter(created_at__date__gte=start_date)
+        except ValueError:
+            pass
+            
+    if end_date:
+        try:
+            end_date = datetime.strptime(end_date, '%Y-%m-%d')
+            sensor_data = sensor_data.filter(created_at__date__lte=end_date)
+        except ValueError:
+            pass
 
-    filename = f"device_{device.id}_sensors_{start_dt.date()}_to_{end_dt.date()}.csv"
-    response = HttpResponse(content_type="text/csv")
-    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    sensor_data = sensor_data.select_related('sensor_config', 'sensor_config__sensor_type').order_by('-created_at')
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="sensor_report_{device.name}_{timezone.now().strftime("%Y%m%d_%H%M%S")}.csv"'
+
     writer = csv.writer(response)
-
+    
+    # Write header with enhanced information
     writer.writerow([
-        "timestamp_IST",
-        "sensor_label",
-        "value",
-        "device_id",
+        'TIMESTAMP', 'DEVICE_NAME', 'SENSOR_LABEL', 'SENSOR_TYPE', 
+        'VALUE', 'UNIT', 'EXPECTED_MIN', 'EXPECTED_MAX', 'STATUS', 'LOCATION'
     ])
 
-    for sd in qs:
+    for data in sensor_data:
+        # Determine status based on expected ranges
+        status = 'NORMAL'
+        config = data.sensor_config
+        if config.expected_min is not None and data.value < config.expected_min:
+            status = 'BELOW_MINIMUM'
+        elif config.expected_max is not None and data.value > config.expected_max:
+            status = 'ABOVE_MAXIMUM'
+
         writer.writerow([
-            format_ist_timestamp(sd.created_at),
-            sd.sensor_config.sensor_label,
-            sd.value,
-            sd.device.id,
+            data.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+            device.name,
+            config.sensor_label,
+            config.sensor_type.name,
+            f"{data.value:.6f}",  # More precise formatting
+            config.sensor_type.unit,
+            config.expected_min or 'N/A',
+            config.expected_max or 'N/A',
+            status,
+            device.location or 'N/A'
         ])
 
     return response
-
+def get_dashboard_stats(customer):
+    """Get enhanced statistics for dashboard display"""
+    devices = Device.objects.filter(customer=customer, is_active=True)
+    total_sensors = SensorConfiguration.objects.filter(device__in=devices).count()
+    
+    # Calculate critical alerts
+    critical_alerts = IoTData.objects.filter(
+        device__in=devices, 
+        is_alert=True
+    ).count()
+    
+    # Calculate average performance from fouling data
+    fouling_data = FoulingData.objects.filter(device__in=devices)
+    if fouling_data.exists():
+        performance_avg = fouling_data.aggregate(models.Avg('performance_ratio'))['performance_ratio__avg'] * 100
+    else:
+        performance_avg = 0
+    
+    return {
+        'total_devices': devices.count(),
+        'total_sensors': total_sensors,
+        'critical_alerts': critical_alerts,
+        'performance_avg': round(performance_avg, 1)
+    }

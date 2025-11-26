@@ -1,40 +1,80 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block title %}Device {{ device.name }} - Sensor Data{% endblock %}
+{% block title %}Advanced Analytics - {{ device.name }}{% endblock %}
 
 {% block extra_head %}
 <style>
-    .device-subtitle {
-        color: #9ca3af;
-        font-size: 0.9rem;
-    }
     .sensor-card {
-        background: radial-gradient(circle at top left, rgba(56,189,248,0.09), transparent 60%),
-                    radial-gradient(circle at bottom right, rgba(52,211,153,0.08), transparent 60%),
-                    #020617;
+        background: linear-gradient(135deg, var(--bg-card) 0%, rgba(30, 41, 59, 0.8) 100%);
         border-radius: 1rem;
-        border: 1px solid #1f2937;
-        box-shadow: 0 18px 30px rgba(0,0,0,0.45);
+        border: 1px solid var(--border-subtle);
+        box-shadow: var(--shadow-lg);
+        transition: all 0.3s ease;
     }
+    
+    .sensor-card:hover {
+        transform: translateY(-5px);
+        box-shadow: var(--shadow-xl);
+        border-color: var(--accent-primary);
+    }
+    
     .sensor-card-header {
-        border-bottom: 1px solid rgba(15,23,42,0.9);
-        background: transparent;
+        border-bottom: 1px solid var(--border-subtle);
+        background: rgba(15, 23, 42, 0.5);
         display: flex;
         justify-content: space-between;
         align-items: center;
+        padding: 1.25rem 1.5rem;
     }
+    
     .sensor-label-chip {
         font-size: 0.75rem;
-        padding: 0.15rem 0.55rem;
-        border-radius: 999px;
-        background: rgba(15,23,42,0.8);
-        border: 1px solid #1f2937;
-        color: #e5e7eb;
+        padding: 0.25rem 0.75rem;
+        border-radius: 50rem;
+        background: rgba(59, 130, 246, 0.2);
+        border: 1px solid rgba(59, 130, 246, 0.3);
+        color: #93c5fd;
     }
-    .sensor-last-value {
-        font-size: 0.85rem;
-        color: #9ca3af;
+    
+    .sensor-stats {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+    
+    .stat-item {
+        text-align: center;
+        padding: 0.75rem;
+        background: rgba(15, 23, 42, 0.5);
+        border-radius: 0.5rem;
+    }
+    
+    .stat-value {
+        font-size: 1.25rem;
+        font-weight: 700;
+        margin-bottom: 0.25rem;
+    }
+    
+    .stat-label {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    
+    .chart-container {
+        position: relative;
+        height: 250px;
+        width: 100%;
+        margin-top: 1rem;
+    }
+    
+    .export-buttons {
+        display: flex;
+        gap: 0.5rem;
+        margin-top: 1rem;
     }
 </style>
 {% endblock %}
@@ -42,137 +82,165 @@
 {% block content %}
 <div class="page-header">
     <h1>{{ device.name }}</h1>
-    <p class="device-subtitle">
-        Live historical sensor readings (last 50 points per sensor).
-    </p>
+    <p class="text-muted">Advanced sensor analytics and real-time monitoring</p>
 </div>
 
 <div class="row g-4">
-    <!-- LEFT SIDEBAR -->
+    <!-- Device Information Sidebar -->
     <div class="col-12 col-lg-4">
         <div class="card h-100">
-            <div class="card-header">
-                <h5 class="mb-0">📋 Device Information</h5>
+            <div class="card-header d-flex align-items-center">
+                <i class="fas fa-info-circle me-2 text-primary"></i>
+                <h5 class="mb-0">Device Information</h5>
             </div>
             <div class="card-body">
-                <p><strong>ID:</strong> {{ device.id }}</p>
-
+                <div class="mb-3">
+                    <strong class="text-muted d-block mb-1">Device ID</strong>
+                    <span class="h6">{{ device.id }}</span>
+                </div>
+                
                 {% if device.location %}
-                    <p><strong>Location:</strong> {{ device.location }}</p>
+                <div class="mb-3">
+                    <strong class="text-muted d-block mb-1">Location</strong>
+                    <span><i class="fas fa-map-marker-alt me-2 text-muted"></i>{{ device.location }}</span>
+                </div>
                 {% endif %}
-
-                <p><strong>Status:</strong>
+                
+                {% if device.device_type %}
+                <div class="mb-3">
+                    <strong class="text-muted d-block mb-1">Device Type</strong>
+                    <span><i class="fas fa-cog me-2 text-muted"></i>{{ device.device_type.name }}</span>
+                </div>
+                {% endif %}
+                
+                <div class="mb-3">
+                    <strong class="text-muted d-block mb-1">Status</strong>
                     {% if device.is_active %}
-                        <span class="badge bg-success">Active</span>
+                        <span class="badge bg-success badge-soft">
+                            <i class="fas fa-check-circle me-1"></i>Active
+                        </span>
                     {% else %}
-                        <span class="badge bg-secondary">Inactive</span>
+                        <span class="badge bg-secondary badge-soft">
+                            <i class="fas fa-pause-circle me-1"></i>Inactive
+                        </span>
                     {% endif %}
-                </p>
+                </div>
+                
+                <div class="mb-3">
+                    <strong class="text-muted d-block mb-1">Created</strong>
+                    <span>{{ device.created_at|date:"M d, Y" }}</span>
+                </div>
 
-                <hr>
-
-                <p class="small text-muted mb-1">Tips:</p>
-                <ul class="small text-muted mb-3">
-                    <li>Hover over a point to see timestamp & value</li>
-                    <li>Each sensor has its own chart</li>
-                    <li>Use the fouling page for performance KPIs</li>
-                </ul>
+                <hr class="my-3">
 
                 <div class="d-grid gap-2">
-                    <a href="{% url 'customer_dashboard' %}" class="btn btn-sm btn-outline-light">
-                        ⬅️ Back to Dashboard
+                    <a href="{% url 'customer_dashboard' %}" class="btn btn-outline-primary">
+                        <i class="fas fa-arrow-left me-1"></i>Back to Dashboard
                     </a>
-                    <a href="{% url 'fouling_monitoring' device.id %}" class="btn btn-sm btn-warning">
-                        🔥 Fouling Monitoring
+                    <a href="{% url 'fouling_monitoring' device.id %}" class="btn btn-warning">
+                        <i class="fas fa-fire me-1"></i>Fouling Analysis
                     </a>
+                    <div class="btn-group" role="group">
+                        <a href="{% url 'device_sensor_report_csv' device.id %}" class="btn btn-outline-success btn-sm">
+                            <i class="fas fa-file-csv me-1"></i>Sensor CSV
+                        </a>
+                        <a href="{% url 'device_fouling_report_csv' device.id %}" class="btn btn-outline-info btn-sm">
+                            <i class="fas fa-file-csv me-1"></i>Fouling CSV
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- SENSOR GRAPHS -->
+    <!-- Sensor Charts Grid -->
     <div class="col-12 col-lg-8">
-        <div id="sensorChartsContainer" class="row g-4">
-            <!-- JS dynamically inserts chart cards here -->
+        <div class="row g-4">
+            {% for sensor_label, readings in sensor_data.items %}
+            <div class="col-12 col-md-6">
+                <div class="sensor-card">
+                    <div class="sensor-card-header">
+                        <div>
+                            <h6 class="mb-0">{{ sensor_label|upper }}</h6>
+                            {% with last_reading=readings|last %}
+                            <small class="text-muted">
+                                Last: {{ last_reading.value }} {{ last_reading.unit }}
+                            </small>
+                            {% endwith %}
+                        </div>
+                        <span class="sensor-label-chip">{{ sensor_label }}</span>
+                    </div>
+                    
+                    <div class="card-body">
+                        <div class="chart-container">
+                            <canvas id="chart-{{ sensor_label|slugify }}"></canvas>
+                        </div>
+                        
+                        {% with last_reading=readings|last %}
+                        <div class="sensor-stats">
+                            <div class="stat-item">
+                                <div class="stat-value {% if 'temp' in sensor_label.lower %}temperature{% elif 'press' in sensor_label.lower %}pressure{% elif 'flow' in sensor_label.lower %}flow{% else %}generic{% endif %}">
+                                    {{ last_reading.value }}
+                                </div>
+                                <div class="stat-label">Current</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value text-muted">
+                                    {{ readings|length }}
+                                </div>
+                                <div class="stat-label">Readings</div>
+                            </div>
+                        </div>
+                        {% endwith %}
+                    </div>
+                </div>
+            </div>
+            {% empty %}
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body text-center py-5">
+                        <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">No Sensor Data Available</h5>
+                        <p class="text-muted mb-0">
+                            Sensor data will appear here once the device starts sending measurements.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
         </div>
     </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
 <script>
-    // Sensor data injected from Django view
+// Enhanced chart configuration
+const chartColors = [
+    { border: 'rgba(59, 130, 246, 1)', fill: 'rgba(59, 130, 246, 0.1)' },
+    { border: 'rgba(16, 185, 129, 1)', fill: 'rgba(16, 185, 129, 0.1)' },
+    { border: 'rgba(245, 158, 11, 1)', fill: 'rgba(245, 158, 11, 0.1)' },
+    { border: 'rgba(239, 68, 68, 1)', fill: 'rgba(239, 68, 68, 0.1)' },
+    { border: 'rgba(139, 92, 246, 1)', fill: 'rgba(139, 92, 246, 0.1)' },
+    { border: 'rgba(14, 165, 233, 1)', fill: 'rgba(14, 165, 233, 0.1)' }
+];
+
+// Initialize all sensor charts
+document.addEventListener('DOMContentLoaded', function() {
     const sensorData = JSON.parse('{{ sensor_data_json|escapejs }}');
-    const container = document.getElementById('sensorChartsContainer');
-
-    // Prettier color palette
-    const chartColors = [
-        { border: 'rgba(56,189,248,1)',   fill: 'rgba(56,189,248,0.18)' },  // cyan
-        { border: 'rgba(34,197,94,1)',    fill: 'rgba(34,197,94,0.18)' },   // green
-        { border: 'rgba(239,68,68,1)',    fill: 'rgba(239,68,68,0.18)' },   // red
-        { border: 'rgba(234,179,8,1)',    fill: 'rgba(234,179,8,0.22)' },   // amber
-        { border: 'rgba(129,140,248,1)',  fill: 'rgba(129,140,248,0.20)' }, // indigo
-        { border: 'rgba(244,114,182,1)',  fill: 'rgba(244,114,182,0.20)' }  // pink
-    ];
-
-    function prettyLabel(label) {
-        // Small cleanup (optional)
-        return label.replace(/_/g, ' ').toUpperCase();
-    }
-
-    function createSensorCard(sensorLabel, readings, index) {
-        const col = document.createElement('div');
-        col.className = 'col-12 col-md-6';
-
-        const card = document.createElement('div');
-        card.className = 'sensor-card';
-
-        const header = document.createElement('div');
-        header.className = 'card-header sensor-card-header';
-
-        const title = document.createElement('div');
-        title.innerHTML = `<h6 class="mb-0">${prettyLabel(sensorLabel)}</h6>`;
-
-        const lastReading = readings[readings.length - 1];
-        const lastValueText = lastReading
-            ? `${lastReading.value} @ ${lastReading.timestamp}`
-            : 'No data';
-
-        const meta = document.createElement('div');
-        meta.innerHTML = `
-            <div class="sensor-label-chip">${sensorLabel}</div>
-            <div class="sensor-last-value mt-1 text-end">
-                <span class="d-block">Last: ${lastValueText}</span>
-            </div>
-        `;
-
-        header.appendChild(title);
-        header.appendChild(meta);
-
-        const body = document.createElement('div');
-        body.className = 'card-body';
-
-        const canvas = document.createElement('canvas');
-        canvas.height = 160;
-        body.appendChild(canvas);
-
-        card.appendChild(header);
-        card.appendChild(body);
-        col.appendChild(card);
-        container.appendChild(col);
-
-        buildChart(canvas, sensorLabel, readings, index);
-    }
-
-    function buildChart(canvas, sensorLabel, readings, index) {
+    
+    Object.keys(sensorData).forEach((sensorLabel, index) => {
+        const readings = sensorData[sensorLabel];
+        const canvasId = `chart-${sensorLabel.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()}`;
+        const canvas = document.getElementById(canvasId);
+        
+        if (!canvas || !readings.length) return;
+        
+        const color = chartColors[index % chartColors.length];
         const labels = readings.map(r => r.timestamp);
         const values = readings.map(r => r.value);
-
-        const color = chartColors[index % chartColors.length];
-
-        new Chart(canvas.getContext('2d'), {
+        
+        new Chart(canvas, {
             type: 'line',
             data: {
                 labels: labels,
@@ -184,7 +252,7 @@
                     backgroundColor: color.fill,
                     pointRadius: 0,
                     pointHoverRadius: 4,
-                    tension: 0.35,
+                    tension: 0.4,
                     fill: true,
                 }]
             },
@@ -194,68 +262,42 @@
                 plugins: {
                     legend: { display: false },
                     tooltip: {
+                        mode: 'index',
+                        intersect: false,
                         callbacks: {
                             label: function(context) {
-                                return ` ${context.parsed.y}`;
+                                return ` ${sensorLabel}: ${context.parsed.y}`;
                             }
                         }
                     }
                 },
                 scales: {
                     x: {
-                        title: {
-                            display: false,
-                        },
-                        ticks: {
-                            maxTicksLimit: 5,
-                            color: '#9ca3af',
-                            autoSkip: true,
-                            maxRotation: 0,
-                            minRotation: 0,
-                        },
-                        grid: {
-                            display: false
-                        }
+                        display: false,
+                        grid: { display: false }
                     },
                     y: {
                         beginAtZero: false,
-                        title: {
-                            display: true,
-                            text: 'Value',
-                            color: '#9ca3af'
+                        grid: {
+                            color: 'rgba(148, 163, 184, 0.1)'
                         },
                         ticks: {
-                            color: '#e5e7eb'
-                        },
-                        grid: {
-                            color: 'rgba(148,163,184,0.2)'
+                            color: 'rgba(148, 163, 184, 0.8)'
                         }
                     }
+                },
+                interaction: {
+                    intersect: false,
+                    mode: 'index'
                 }
             }
         });
-    }
+    });
+});
 
-    // Build charts for each sensor label
-    const labels = Object.keys(sensorData).sort();
-
-    if (!labels.length) {
-        container.innerHTML = `
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-body">
-                        <p class="text-muted mb-0">No sensor data available for this device yet.</p>
-                    </div>
-                </div>
-            </div>
-        `;
-    } else {
-        labels.forEach((label, index) => {
-            const readings = sensorData[label] || [];
-            if (!readings.length) return;
-            createSensorCard(label, readings, index);
-        });
-    }
+// Auto-refresh data every 30 seconds
+setTimeout(() => {
+    window.location.reload();
+}, 30000);
 </script>
 {% endblock %}
-
