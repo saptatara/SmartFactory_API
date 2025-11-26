@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Charts - {{ device.name }}</title>
+    <!-- Include your chart libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .chart-container {
+            width: 100%;
+            height: 400px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test Charts: {{ device.name }}</h1>
+    <p>This page tests if charts can render with the data format.</p>
+    
+    <div class="chart-container">
+        <canvas id="temperatureChart"></canvas>
+    </div>
+    
+    <div id="debugInfo">
+        <h3>Data Structure:</h3>
+        <pre id="dataStructure"></pre>
+    </div>
+
+    <script>
+        // Get the sensor data from Django template
+        const sensorData = {{ sensor_data_json|safe }};
+        
+        // Display the data structure
+        document.getElementById('dataStructure').textContent = 
+            JSON.stringify(sensorData, null, 2);
+        
+        console.log("Sensor Data for charts:", sensorData);
+        
+        // Check if we have data
+        if (Object.keys(sensorData).length === 0) {
+            console.error("No sensor data available!");
+            document.body.innerHTML += '<p style="color: red;">ERROR: No sensor data!</p>';
+        } else {
+            console.log("Sensor labels:", Object.keys(sensorData));
+            Object.keys(sensorData).forEach(label => {
+                console.log(`${label}: ${sensorData[label].length} data points`);
+            });
+        }
+        
+        // Simple chart rendering test
+        try {
+            const ctx = document.getElementById('temperatureChart').getContext('2d');
+            
+            // Extract data for t1_in sensor
+            const t1inData = sensorData['t1_in'] || [];
+            const labels = t1inData.map(item => item.timestamp);
+            const values = t1inData.map(item => item.value);
+            
+            const chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'T1 In Temperature',
+                        data: values,
+                        borderColor: 'rgb(255, 99, 132)',
+                        backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            title: {
+                                display: true,
+                                text: 'Temperature (°C)'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Time'
+                            }
+                        }
+                    }
+                }
+            });
+            
+            console.log("Chart rendered successfully!");
+            document.body.innerHTML += '<p style="color: green;">SUCCESS: Chart rendered!</p>';
+            
+        } catch (error) {
+            console.error("Chart rendering failed:", error);
+            document.body.innerHTML += `<p style="color: red;">CHART ERROR: ${error.message}</p>`;
+        }
+    </script>
+</body>
+</html>

@@ -1221,3 +1221,49 @@ def debug_device_data(request, device_id):
     print(f"Sensor data JSON length: {len(json.dumps(sensor_data))}")
     
     return render(request, "api/debug_device_data.html", context)
+@login_required
+def test_charts(request, device_id):
+    """Test view to verify chart rendering with sample data"""
+    device = get_object_or_404(Device, id=device_id)
+    
+    # Create sample data to test charts
+    import random
+    from datetime import datetime, timedelta
+    
+    # Generate sample data for testing
+    sensor_data = {
+        "t1_in": [],
+        "t1_out": [], 
+        "t2_in": [],
+        "t2_out": []
+    }
+    
+    base_time = timezone.now()
+    for i in range(10):
+        timestamp = base_time - timedelta(minutes=i*2)
+        ist_timestamp = format_ist_timestamp(timestamp)
+        
+        sensor_data["t1_in"].append({
+            "timestamp": ist_timestamp,
+            "value": 25 + random.uniform(0, 5) + i*0.5
+        })
+        sensor_data["t1_out"].append({
+            "timestamp": ist_timestamp, 
+            "value": 20 + random.uniform(0, 5) + i*0.3
+        })
+        sensor_data["t2_in"].append({
+            "timestamp": ist_timestamp,
+            "value": 15 + random.uniform(0, 3) + i*0.2
+        })
+        sensor_data["t2_out"].append({
+            "timestamp": ist_timestamp,
+            "value": 18 + random.uniform(0, 4) + i*0.4
+        })
+    
+    context = {
+        "device": device,
+        "sensor_data_json": json.dumps(sensor_data),
+        "test_data": True
+    }
+    
+    return render(request, "api/test_charts.html", context)
