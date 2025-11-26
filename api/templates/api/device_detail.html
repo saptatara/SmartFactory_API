@@ -3,82 +3,6 @@
 
 {% block title %}Advanced Analytics - {{ device.name }}{% endblock %}
 
-{% block extra_head %}
-<!-- Chart.js is already loaded in base.html - REMOVED DUPLICATE LOADING -->
-<style>
-    .sensor-card {
-        background: linear-gradient(135deg, var(--bg-card) 0%, rgba(30, 41, 59, 0.8) 100%);
-        border-radius: 1rem;
-        border: 1px solid var(--border-subtle);
-        box-shadow: var(--shadow-lg);
-        transition: all 0.3s ease;
-    }
-
-    .sensor-card:hover {
-        transform: translateY(-5px);
-        box-shadow: var(--shadow-xl);
-        border-color: var(--accent-primary);
-    }
-
-    .sensor-card-header {
-        border-bottom: 1px solid var(--border-subtle);
-        background: rgba(15, 23, 42, 0.5);
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 1.25rem 1.5rem;
-    }
-
-    .sensor-label-chip {
-        font-size: 0.75rem;
-        padding: 0.25rem 0.75rem;
-        border-radius: 50rem;
-        background: rgba(59, 130, 246, 0.2);
-        border: 1px solid rgba(59, 130, 246, 0.3);
-        color: #93c5fd;
-    }
-
-    .sensor-stats {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 1rem;
-        margin-top: 1rem;
-    }
-
-    .stat-item {
-        text-align: center;
-        padding: 0.75rem;
-        background: rgba(15, 23, 42, 0.5);
-        border-radius: 0.5rem;
-    }
-
-    .stat-value {
-        font-size: 1.25rem;
-        font-weight: 700;
-        margin-bottom: 0.25rem;
-    }
-
-    .stat-label {
-        font-size: 0.75rem;
-        color: var(--text-muted);
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-    }
-
-    .chart-container {
-        position: relative;
-        height: 250px;
-        width: 100%;
-        margin-top: 1rem;
-    }
-    
-    .temperature { color: #ef4444; }
-    .pressure { color: #3b82f6; }
-    .flow { color: #10b981; }
-    .generic { color: #8b5cf6; }
-</style>
-{% endblock %}
-
 {% block content %}
 <div class="page-header">
     <h1>{{ device.name }}</h1>
@@ -103,13 +27,6 @@
                 <div class="mb-3">
                     <strong class="text-muted d-block mb-1">Location</strong>
                     <span><i class="fas fa-map-marker-alt me-2 text-muted"></i>{{ device.location }}</span>
-                </div>
-                {% endif %}
-
-                {% if device.device_type %}
-                <div class="mb-3">
-                    <strong class="text-muted d-block mb-1">Device Type</strong>
-                    <span><i class="fas fa-cog me-2 text-muted"></i>{{ device.device_type.name }}</span>
                 </div>
                 {% endif %}
 
@@ -155,199 +72,36 @@
 
     <!-- Sensor Charts Grid -->
     <div class="col-12 col-lg-8">
-        <div class="row g-4" id="sensor-charts-container">
+        <div class="row g-4">
+            {% if sensor_data %}
+                {% for sensor_label, readings in sensor_data.items %}
+                <div class="col-12 col-md-6">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h6 class="mb-0">{{ sensor_label|upper }}</h6>
+                        </div>
+                        <div class="card-body">
+                            {% if readings %}
+                                <p>Current: <strong>{{ readings.0.value }}</strong></p>
+                                <p>Readings: {{ readings|length }}</p>
+                            {% else %}
+                                <p class="text-muted">No readings available</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
             <div class="col-12">
                 <div class="card">
                     <div class="card-body text-center py-5">
-                        <div class="loading-spinner"></div>
-                        <p class="text-muted mt-3 mb-0">Loading sensor data...</p>
+                        <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">No Sensor Data Available</h5>
                     </div>
                 </div>
             </div>
+            {% endif %}
         </div>
     </div>
 </div>
-{% endblock %}
-
-{% block extra_js %}
-<script>
-// Simple chart configuration
-const chartColors = [
-    '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'
-];
-
-// Initialize charts when DOM is ready
-document.addEventListener('DOMContentLoaded', function() {
-    console.log("DOM loaded, initializing charts...");
-    
-    // Get sensor data from Django template
-    const sensorData = {{ sensor_data_json|safe }};
-    const container = document.getElementById('sensor-charts-container');
-    
-    console.log("Sensor data available:", Object.keys(sensorData));
-    
-    if (!sensorData || Object.keys(sensorData).length === 0) {
-        showNoDataMessage(container);
-        return;
-    }
-    
-    createCharts(sensorData, container);
-});
-
-function showNoDataMessage(container) {
-    container.innerHTML = `
-        <div class="col-12">
-            <div class="card">
-                <div class="card-body text-center py-5">
-                    <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
-                    <h5 class="text-muted">No Sensor Data Available</h5>
-                    <p class="text-muted mb-0">
-                        Sensor data will appear here once the device starts sending measurements.
-                    </p>
-                </div>
-            </div>
-        </div>
-    `;
-}
-
-function createCharts(sensorData, container) {
-    // Clear loading message
-    container.innerHTML = '';
-    
-    // Create a chart for each sensor
-    Object.keys(sensorData).forEach((sensorLabel, index) => {
-        const readings = sensorData[sensorLabel];
-        if (!readings || readings.length === 0) return;
-        
-        const colDiv = document.createElement('div');
-        colDiv.className = 'col-12 col-md-6 mb-4';
-        
-        colDiv.innerHTML = `
-            <div class="sensor-card">
-                <div class="sensor-card-header">
-                    <div>
-                        <h6 class="mb-0">${sensorLabel.toUpperCase()}</h6>
-                        <small class="text-muted">Last: ${readings[0].value}</small>
-                    </div>
-                    <span class="sensor-label-chip">${sensorLabel}</span>
-                </div>
-                <div class="card-body">
-                    <div class="chart-container">
-                        <canvas id="chart-${sensorLabel.replace(/[^a-z0-9]/g, '-')}"></canvas>
-                    </div>
-                    <div class="sensor-stats">
-                        <div class="stat-item">
-                            <div class="stat-value ${getSensorTypeClass(sensorLabel)}">
-                                ${readings[0].value}
-                            </div>
-                            <div class="stat-label">Current</div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-value text-muted">
-                                ${readings.length}
-                            </div>
-                            <div class="stat-label">Readings</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-        
-        container.appendChild(colDiv);
-    });
-    
-    // Initialize Chart.js charts
-    setTimeout(() => initializeChartJs(sensorData), 50);
-}
-
-function initializeChartJs(sensorData) {
-    console.log("Initializing Chart.js charts...");
-    
-    // Check if Chart is available
-    if (typeof Chart === 'undefined') {
-        console.error('Chart.js is not loaded!');
-        return;
-    }
-    
-    Object.keys(sensorData).forEach((sensorLabel, index) => {
-        const readings = sensorData[sensorLabel];
-        const canvasId = `chart-${sensorLabel.replace(/[^a-z0-9]/g, '-')}`;
-        const canvas = document.getElementById(canvasId);
-        
-        if (!canvas) {
-            console.error(`Canvas not found: ${canvasId}`);
-            return;
-        }
-        
-        if (!readings || readings.length === 0) {
-            console.warn(`No readings for sensor: ${sensorLabel}`);
-            return;
-        }
-
-        const labels = readings.map(r => {
-            const date = new Date(r.timestamp);
-            return date.toLocaleTimeString('en-IN', { 
-                hour: '2-digit', 
-                minute: '2-digit',
-                second: '2-digit'
-            });
-        });
-        
-        const values = readings.map(r => r.value);
-
-        try {
-            new Chart(canvas, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: sensorLabel,
-                        data: values,
-                        borderWidth: 2,
-                        borderColor: chartColors[index % chartColors.length],
-                        backgroundColor: chartColors[index % chartColors.length] + '20',
-                        pointRadius: 2,
-                        tension: 0.4,
-                        fill: true,
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        x: { 
-                            display: true,
-                            grid: { display: false },
-                            ticks: { color: '#94a3b8', maxTicksLimit: 5 }
-                        },
-                        y: {
-                            display: true,
-                            grid: { color: 'rgba(148, 163, 184, 0.1)' },
-                            ticks: { color: '#94a3b8' }
-                        }
-                    }
-                }
-            });
-            console.log(`✅ Chart created for ${sensorLabel}`);
-        } catch (error) {
-            console.error(`❌ Error creating chart for ${sensorLabel}:`, error);
-        }
-    });
-}
-
-function getSensorTypeClass(sensorLabel) {
-    const label = sensorLabel.toLowerCase();
-    if (label.includes('temp')) return 'temperature';
-    if (label.includes('press')) return 'pressure';
-    if (label.includes('flow')) return 'flow';
-    return 'generic';
-}
-
-// Auto-refresh every 30 seconds
-setTimeout(() => {
-    console.log("Auto-refreshing page...");
-    window.location.reload();
-}, 30000);
-</script>
 {% endblock %}
