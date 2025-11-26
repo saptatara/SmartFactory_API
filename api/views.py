@@ -6,6 +6,7 @@ from django.http import HttpResponse
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import authenticate, login, logout
 from django.utils import timezone
+from django.db import models
 from rest_framework.decorators import (
     api_view, permission_classes, authentication_classes
 )
