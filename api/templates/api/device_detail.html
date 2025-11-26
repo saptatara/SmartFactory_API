@@ -193,6 +193,8 @@
 
                     <div class="card-body">
                         <div class="chart-container">
+                            <!-- DEBUG: Check what ID is being generated -->
+                            <!-- <div style="display: none;" id="debug-{{ sensor_label }}">canvas-id: chart-{{ sensor_label|slugify }}</div> -->
                             <canvas id="chart-{{ sensor_label|slugify }}"></canvas>
                         </div>
 
@@ -254,18 +256,39 @@ document.addEventListener('DOMContentLoaded', function() {
     
     console.log("Available sensor data:", Object.keys(sensorData));
     
+    // Debug: Check what canvas elements actually exist
+    const allCanvases = Array.from(document.querySelectorAll('canvas'));
+    console.log('All canvas elements on page:', allCanvases.map(c => c.id));
+    
     Object.keys(sensorData).forEach((sensorLabel, index) => {
         const readings = sensorData[sensorLabel];
         
-        // Use the same slugify logic as Django template
-        const canvasId = `chart-${sensorLabel.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
-        const canvas = document.getElementById(canvasId);
+        // Try multiple possible ID formats to find the canvas
+        const possibleIds = [
+            `chart-${sensorLabel.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+            `chart-${sensorLabel.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`,
+            `chart-${sensorLabel}`,
+            `chart-${sensorLabel.replace('_', '-')}`,
+            `chart-${sensorLabel.replace('-', '_')}`
+        ];
+        
+        let canvas = null;
+        let foundId = null;
+        
+        for (const id of possibleIds) {
+            canvas = document.getElementById(id);
+            if (canvas) {
+                foundId = id;
+                break;
+            }
+        }
 
-        console.log(`Creating chart for ${sensorLabel} on canvas ${canvasId}`);
+        console.log(`Creating chart for ${sensorLabel}, trying IDs:`, possibleIds);
+        console.log(`Found canvas:`, canvas ? `Yes (${foundId})` : 'No');
         
         if (!canvas) {
-            console.error(`Canvas not found: ${canvasId}`);
-            console.log('Available canvas elements:', Array.from(document.querySelectorAll('canvas')).map(c => c.id));
+            console.error(`Canvas not found for sensor: ${sensorLabel}`);
+            console.log('Available canvas IDs:', allCanvases.map(c => c.id));
             return;
         }
 
