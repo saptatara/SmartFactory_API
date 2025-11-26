@@ -771,8 +771,34 @@ def device_detail(request, device_id):
 
 @login_required
 def device_detail_ui(request, device_id):
-    return device_detail(request, device_id)
-
+    device = get_object_or_404(Device, id=device_id)
+    
+    # Get sensor data with proper structure
+    sensor_readings = SensorData.objects.filter(device=device).order_by("-created_at")[:100]
+    
+    sensor_data = defaultdict(list)
+    timestamps_seen = set()
+    
+    for r in sensor_readings:
+        timestamp_key = r.created_at.replace(second=0, microsecond=0)
+        sensor_key = (timestamp_key, r.sensor_config.sensor_label)
+        if sensor_key not in timestamps_seen:
+            ist_timestamp = format_ist_timestamp(r.created_at)
+            sensor_data[r.sensor_config.sensor_label].append({
+                "timestamp": ist_timestamp,
+                "value": r.value,
+            })
+            timestamps_seen.add(sensor_key)
+    
+    # Reverse to show chronological order
+    for sensor_label in sensor_data:
+        sensor_data[sensor_label].reverse()
+    
+    return render(request, "api/device_detail.html", {
+        "device": device,
+        "sensor_readings": sensor_readings,
+        "sensor_data_json": json.dumps(sensor_data),
+    })
 
 @login_required
 def add_sensor_data(request):

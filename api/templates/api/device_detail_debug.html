@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug - {{ device.name }}</title>
+    <!-- Include EXACTLY the same Chart.js as test page -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .debug-panel {
+            background: #f0f0f0;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+        }
+        .chart-container {
+            width: 100%;
+            height: 400px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>DEBUG: {{ device.name }}</h1>
+    
+    <div class="debug-panel">
+        <h3>Debug Information</h3>
+        <p>Sensor data keys: <span id="dataKeys"></span></p>
+        <p>Data points per sensor: <span id="dataCounts"></span></p>
+        <button onclick="testBasicChart()">Test Basic Chart</button>
+        <button onclick="checkCanvas()">Check Canvas Elements</button>
+    </div>
+
+    <!-- Your existing chart containers -->
+    <div class="chart-container">
+        <canvas id="temperatureChart"></canvas>
+    </div>
+    
+    <!-- Add more of your existing chart containers here -->
+
+    <script>
+        // Get the sensor data from Django template
+        const sensorData = {{ sensor_data_json|safe }};
+        
+        // Debug info
+        document.getElementById('dataKeys').textContent = Object.keys(sensorData).join(', ');
+        const counts = Object.keys(sensorData).map(k => `${k}: ${sensorData[k].length}`);
+        document.getElementById('dataCounts').textContent = counts.join(', ');
+        
+        console.log("=== DASHBOARD DEBUG ===");
+        console.log("Sensor data:", sensorData);
+        console.log("Canvas elements:", document.querySelectorAll('canvas'));
+        
+        // Test 1: Basic chart (like the working test)
+        function testBasicChart() {
+            console.log("Testing basic chart...");
+            try {
+                const ctx = document.getElementById('temperatureChart').getContext('2d');
+                const t1inData = sensorData['t1_in'] || [];
+                const labels = t1inData.map(item => item.timestamp);
+                const values = t1inData.map(item => item.value);
+                
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'T1 In (Test)',
+                            data: values,
+                            borderColor: 'rgb(255, 99, 132)',
+                            tension: 0.1
+                        }]
+                    }
+                });
+                console.log("✅ Basic chart test PASSED");
+                alert("Basic chart works!");
+            } catch (error) {
+                console.error("❌ Basic chart test FAILED:", error);
+                alert("Basic chart failed: " + error.message);
+            }
+        }
+        
+        // Test 2: Check if canvas elements exist
+        function checkCanvas() {
+            const canvases = document.querySelectorAll('canvas');
+            console.log("Found canvas elements:", canvases.length);
+            canvases.forEach((canvas, i) => {
+                console.log(`Canvas ${i}:`, canvas.id, canvas.offsetWidth, canvas.offsetHeight);
+            });
+            alert(`Found ${canvases.length} canvas elements`);
+        }
+        
+        // Run basic test on load
+        setTimeout(testBasicChart, 1000);
+    </script>
+    
+    <!-- COPY YOUR EXISTING DASHBOARD JAVASCRIPT HERE -->
+    {% comment %}
+    Copy all your existing chart initialization code here
+    {% endcomment %}
+    
+</body>
+</html>

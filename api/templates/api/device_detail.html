@@ -4,6 +4,9 @@
 {% block title %}Advanced Analytics - {{ device.name }}{% endblock %}
 
 {% block extra_head %}
+<!-- ADD CHART.JS -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
 <style>
     .sensor-card {
         background: linear-gradient(135deg, var(--bg-card) 0%, rgba(30, 41, 59, 0.8) 100%);
@@ -12,13 +15,13 @@
         box-shadow: var(--shadow-lg);
         transition: all 0.3s ease;
     }
-    
+
     .sensor-card:hover {
         transform: translateY(-5px);
         box-shadow: var(--shadow-xl);
         border-color: var(--accent-primary);
     }
-    
+
     .sensor-card-header {
         border-bottom: 1px solid var(--border-subtle);
         background: rgba(15, 23, 42, 0.5);
@@ -27,7 +30,7 @@
         align-items: center;
         padding: 1.25rem 1.5rem;
     }
-    
+
     .sensor-label-chip {
         font-size: 0.75rem;
         padding: 0.25rem 0.75rem;
@@ -36,41 +39,41 @@
         border: 1px solid rgba(59, 130, 246, 0.3);
         color: #93c5fd;
     }
-    
+
     .sensor-stats {
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 1rem;
         margin-top: 1rem;
     }
-    
+
     .stat-item {
         text-align: center;
         padding: 0.75rem;
         background: rgba(15, 23, 42, 0.5);
         border-radius: 0.5rem;
     }
-    
+
     .stat-value {
         font-size: 1.25rem;
         font-weight: 700;
         margin-bottom: 0.25rem;
     }
-    
+
     .stat-label {
         font-size: 0.75rem;
         color: var(--text-muted);
         text-transform: uppercase;
         letter-spacing: 0.05em;
     }
-    
+
     .chart-container {
         position: relative;
         height: 250px;
         width: 100%;
         margin-top: 1rem;
     }
-    
+
     .export-buttons {
         display: flex;
         gap: 0.5rem;
@@ -98,21 +101,21 @@
                     <strong class="text-muted d-block mb-1">Device ID</strong>
                     <span class="h6">{{ device.id }}</span>
                 </div>
-                
+
                 {% if device.location %}
                 <div class="mb-3">
                     <strong class="text-muted d-block mb-1">Location</strong>
                     <span><i class="fas fa-map-marker-alt me-2 text-muted"></i>{{ device.location }}</span>
                 </div>
                 {% endif %}
-                
+
                 {% if device.device_type %}
                 <div class="mb-3">
                     <strong class="text-muted d-block mb-1">Device Type</strong>
                     <span><i class="fas fa-cog me-2 text-muted"></i>{{ device.device_type.name }}</span>
                 </div>
                 {% endif %}
-                
+
                 <div class="mb-3">
                     <strong class="text-muted d-block mb-1">Status</strong>
                     {% if device.is_active %}
@@ -125,7 +128,7 @@
                         </span>
                     {% endif %}
                 </div>
-                
+
                 <div class="mb-3">
                     <strong class="text-muted d-block mb-1">Created</strong>
                     <span>{{ device.created_at|date:"M d, Y" }}</span>
@@ -162,25 +165,26 @@
                     <div class="sensor-card-header">
                         <div>
                             <h6 class="mb-0">{{ sensor_label|upper }}</h6>
-                            {% with last_reading=readings|last %}
-                            <small class="text-muted">
-                                Last: {{ last_reading.value }} {{ last_reading.unit }}
-                            </small>
-                            {% endwith %}
+                            {% if readings %}
+                                <small class="text-muted">
+                                    Last: {{ readings.0.value }} 
+                                    <!-- Removed unit since it doesn't exist in our data -->
+                                </small>
+                            {% endif %}
                         </div>
                         <span class="sensor-label-chip">{{ sensor_label }}</span>
                     </div>
-                    
+
                     <div class="card-body">
                         <div class="chart-container">
                             <canvas id="chart-{{ sensor_label|slugify }}"></canvas>
                         </div>
-                        
-                        {% with last_reading=readings|last %}
+
+                        {% if readings %}
                         <div class="sensor-stats">
                             <div class="stat-item">
                                 <div class="stat-value {% if 'temp' in sensor_label.lower %}temperature{% elif 'press' in sensor_label.lower %}pressure{% elif 'flow' in sensor_label.lower %}flow{% else %}generic{% endif %}">
-                                    {{ last_reading.value }}
+                                    {{ readings.0.value }}
                                 </div>
                                 <div class="stat-label">Current</div>
                             </div>
@@ -191,7 +195,7 @@
                                 <div class="stat-label">Readings</div>
                             </div>
                         </div>
-                        {% endwith %}
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -227,71 +231,93 @@ const chartColors = [
 
 // Initialize all sensor charts
 document.addEventListener('DOMContentLoaded', function() {
-    const sensorData = JSON.parse('{{ sensor_data_json|escapejs }}');
+    console.log("Initializing charts...");
+    
+    // Get sensor data from Django template
+    const sensorData = {{ sensor_data_json|safe }};
+    
+    console.log("Available sensor data:", Object.keys(sensorData));
     
     Object.keys(sensorData).forEach((sensorLabel, index) => {
         const readings = sensorData[sensorLabel];
         const canvasId = `chart-${sensorLabel.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()}`;
         const canvas = document.getElementById(canvasId);
+
+        console.log(`Creating chart for ${sensorLabel} on canvas ${canvasId}`);
         
-        if (!canvas || !readings.length) return;
-        
+        if (!canvas) {
+            console.error(`Canvas not found: ${canvasId}`);
+            return;
+        }
+
+        if (!readings || readings.length === 0) {
+            console.warn(`No readings for sensor: ${sensorLabel}`);
+            return;
+        }
+
         const color = chartColors[index % chartColors.length];
         const labels = readings.map(r => r.timestamp);
         const values = readings.map(r => r.value);
-        
-        new Chart(canvas, {
-            type: 'line',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: sensorLabel,
-                    data: values,
-                    borderWidth: 2,
-                    borderColor: color.border,
-                    backgroundColor: color.fill,
-                    pointRadius: 0,
-                    pointHoverRadius: 4,
-                    tension: 0.4,
-                    fill: true,
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                        mode: 'index',
-                        intersect: false,
-                        callbacks: {
-                            label: function(context) {
-                                return ` ${sensorLabel}: ${context.parsed.y}`;
+
+        console.log(`Chart data for ${sensorLabel}:`, { labels, values });
+
+        try {
+            new Chart(canvas, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: sensorLabel,
+                        data: values,
+                        borderWidth: 2,
+                        borderColor: color.border,
+                        backgroundColor: color.fill,
+                        pointRadius: 0,
+                        pointHoverRadius: 4,
+                        tension: 0.4,
+                        fill: true,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {
+                                label: function(context) {
+                                    return ` ${sensorLabel}: ${context.parsed.y}`;
+                                }
                             }
                         }
-                    }
-                },
-                scales: {
-                    x: {
-                        display: false,
-                        grid: { display: false }
                     },
-                    y: {
-                        beginAtZero: false,
-                        grid: {
-                            color: 'rgba(148, 163, 184, 0.1)'
+                    scales: {
+                        x: {
+                            display: false,
+                            grid: { display: false }
                         },
-                        ticks: {
-                            color: 'rgba(148, 163, 184, 0.8)'
+                        y: {
+                            beginAtZero: false,
+                            grid: {
+                                color: 'rgba(148, 163, 184, 0.1)'
+                            },
+                            ticks: {
+                                color: 'rgba(148, 163, 184, 0.8)'
+                            }
                         }
+                    },
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
                     }
-                },
-                interaction: {
-                    intersect: false,
-                    mode: 'index'
                 }
-            }
-        });
+            });
+            console.log(`✅ Chart created successfully for ${sensorLabel}`);
+        } catch (error) {
+            console.error(`❌ Error creating chart for ${sensorLabel}:`, error);
+        }
     });
 });
 
