@@ -58,6 +58,18 @@ else
   echo "Web container is already running for project ${PROJECT}."
 fi
 
+# Wait for database to be ready
+echo "⏳ Waiting for database to be ready..."
+sleep 10
+
+# Step 1: Run migrations FIRST to ensure all tables exist
+echo "🛠️ Running database migrations..."
+docker compose --env-file "$ENV_FILE" -p "${PROJECT}" exec -T web python manage.py migrate --noinput
+
+# Step 2: Check if migrations were successful
+echo "🔍 Checking database state..."
+docker compose --env-file "$ENV_FILE" -p "${PROJECT}" exec -T web python manage.py check --database default
+
 # Run the Django creation block inside the tenant web container
 docker compose --env-file "$ENV_FILE" -p "${PROJECT}" exec -T web python manage.py shell <<PY
 from django.contrib.auth import get_user_model
@@ -87,12 +99,15 @@ def safe_print(title, obj):
     print()
 
 with transaction.atomic():
-    # Check if we should delete the sample device first
-    sample_device = Device.objects.filter(name='Heat Exchanger Unit #1').first()
-    if sample_device:
-        print("Found sample device 'Heat Exchanger Unit #1' - removing it...")
-        sample_device.delete()
-        print("Sample device removed")
+    # Check if we should delete the sample device first (with error handling)
+    try:
+        sample_device = Device.objects.filter(name='Heat Exchanger Unit #1').first()
+        if sample_device:
+            print("Found sample device 'Heat Exchanger Unit #1' - removing it...")
+            sample_device.delete()
+            print("Sample device removed")
+    except Exception as e:
+        print(f"⚠️  Could not remove sample device (might not exist yet): {e}")
 
     user, created = User.objects.get_or_create(username=USERNAME, defaults={"email": EMAIL})
     if created:
@@ -123,10 +138,13 @@ with transaction.atomic():
     safe_print("Customer", f"{customer.company_name} (id={customer.pk}) linked to user {user.username}")
 
     # Delete any existing device with the same name to avoid duplicates
-    existing_devices = Device.objects.filter(name=DEVICE_NAME, customer=customer)
-    if existing_devices.exists():
-        print(f"Removing existing device '{DEVICE_NAME}'...")
-        existing_devices.delete()
+    try:
+        existing_devices = Device.objects.filter(name=DEVICE_NAME, customer=customer)
+        if existing_devices.exists():
+            print(f"Removing existing device '{DEVICE_NAME}'...")
+            existing_devices.delete()
+    except Exception as e:
+        print(f"⚠️  Could not remove existing devices: {e}")
 
     device = Device.objects.create(
         name=DEVICE_NAME, 
@@ -161,24 +179,30 @@ with transaction.atomic():
         else:
             print(f"ℹ️  SensorConfiguration exists: {sensor_label}")
 
-    # Create sample fouling data for the device
-    fouling_data, fd_created = FoulingData.objects.get_or_create(
-        device=device,
-        defaults={
-            'fouling_factor': 0.00015,
-            'u_actual': 650.0,
-            'u_clean': 800.0,
-            'performance_ratio': 0.81,
-            'heat_duty': 150000.0,
-            'lmtd': 28.5,
-            'severity': 'Minor Fouling',
-            'recommendation': 'Monitor closely, consider routine cleaning during next maintenance',
-            'risk_level': 'Low'
-        }
-    )
-    
-    if fd_created:
-        print("✅ Created sample fouling data for device")
+    # Create sample fouling data for the device (with error handling)
+    try:
+        fouling_data, fd_created = FoulingData.objects.get_or_create(
+            device=device,
+            defaults={
+                'fouling_factor': 0.00015,
+                'u_actual': 650.0,
+                'u_clean': 800.0,
+                'performance_ratio': 0.81,
+                'heat_duty': 150000.0,
+                'lmtd': 28.5,
+                'severity': 'Minor Fouling',
+                'recommendation': 'Monitor closely, consider routine cleaning during next maintenance',
+                'risk_level': 'Low'
+            }
+        )
+        
+        if fd_created:
+            print("✅ Created sample fouling data for device")
+        else:
+            print("ℹ️  Fouling data already exists")
+    except Exception as e:
+        print(f"⚠️  Could not create fouling data: {e}")
+        print("This might be because the FoulingData model isn't migrated yet")
 
     print("\\n" + "="*50)
     print("🎯 SETUP COMPLETE - READY FOR ARDUINO DATA")
