@@ -4,9 +4,7 @@
 {% block title %}Advanced Analytics - {{ device.name }}{% endblock %}
 
 {% block extra_head %}
-<!-- ADD CHART.JS -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
+<!-- Chart.js is already loaded in base.html - REMOVED DUPLICATE LOADING -->
 <style>
     .sensor-card {
         background: linear-gradient(135deg, var(--bg-card) 0%, rgba(30, 41, 59, 0.8) 100%);
@@ -180,9 +178,13 @@ const chartColors = [
 
 // Initialize charts when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
+    console.log("DOM loaded, initializing charts...");
+    
     // Get sensor data from Django template
     const sensorData = {{ sensor_data_json|safe }};
     const container = document.getElementById('sensor-charts-container');
+    
+    console.log("Sensor data available:", Object.keys(sensorData));
     
     if (!sensorData || Object.keys(sensorData).length === 0) {
         showNoDataMessage(container);
@@ -259,12 +261,28 @@ function createCharts(sensorData, container) {
 }
 
 function initializeChartJs(sensorData) {
+    console.log("Initializing Chart.js charts...");
+    
+    // Check if Chart is available
+    if (typeof Chart === 'undefined') {
+        console.error('Chart.js is not loaded!');
+        return;
+    }
+    
     Object.keys(sensorData).forEach((sensorLabel, index) => {
         const readings = sensorData[sensorLabel];
         const canvasId = `chart-${sensorLabel.replace(/[^a-z0-9]/g, '-')}`;
         const canvas = document.getElementById(canvasId);
         
-        if (!canvas || !readings || readings.length === 0) return;
+        if (!canvas) {
+            console.error(`Canvas not found: ${canvasId}`);
+            return;
+        }
+        
+        if (!readings || readings.length === 0) {
+            console.warn(`No readings for sensor: ${sensorLabel}`);
+            return;
+        }
 
         const labels = readings.map(r => {
             const date = new Date(r.timestamp);
@@ -277,39 +295,44 @@ function initializeChartJs(sensorData) {
         
         const values = readings.map(r => r.value);
 
-        new Chart(canvas, {
-            type: 'line',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: sensorLabel,
-                    data: values,
-                    borderWidth: 2,
-                    borderColor: chartColors[index % chartColors.length],
-                    backgroundColor: chartColors[index % chartColors.length] + '20',
-                    pointRadius: 2,
-                    tension: 0.4,
-                    fill: true,
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                    x: { 
-                        display: true,
-                        grid: { display: false },
-                        ticks: { color: '#94a3b8', maxTicksLimit: 5 }
-                    },
-                    y: {
-                        display: true,
-                        grid: { color: 'rgba(148, 163, 184, 0.1)' },
-                        ticks: { color: '#94a3b8' }
+        try {
+            new Chart(canvas, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: sensorLabel,
+                        data: values,
+                        borderWidth: 2,
+                        borderColor: chartColors[index % chartColors.length],
+                        backgroundColor: chartColors[index % chartColors.length] + '20',
+                        pointRadius: 2,
+                        tension: 0.4,
+                        fill: true,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { 
+                            display: true,
+                            grid: { display: false },
+                            ticks: { color: '#94a3b8', maxTicksLimit: 5 }
+                        },
+                        y: {
+                            display: true,
+                            grid: { color: 'rgba(148, 163, 184, 0.1)' },
+                            ticks: { color: '#94a3b8' }
+                        }
                     }
                 }
-            }
-        });
+            });
+            console.log(`✅ Chart created for ${sensorLabel}`);
+        } catch (error) {
+            console.error(`❌ Error creating chart for ${sensorLabel}:`, error);
+        }
     });
 }
 
@@ -322,6 +345,9 @@ function getSensorTypeClass(sensorLabel) {
 }
 
 // Auto-refresh every 30 seconds
-setTimeout(() => window.location.reload(), 30000);
+setTimeout(() => {
+    console.log("Auto-refreshing page...");
+    window.location.reload();
+}, 30000);
 </script>
 {% endblock %}
