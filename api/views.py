@@ -727,34 +727,18 @@ def customer_logout(request):
 
 
 # ==================== CUSTOMER UI ====================
-
 @login_required
 def customer_dashboard(request):
-    """Enhanced customer dashboard with professional stats"""
+    """Redirect to the UUID-based dashboard"""
     if not request.user.is_authenticated:
         return redirect('customer_login')
     
     try:
         customer = Customer.objects.get(user=request.user)
-        devices = Device.objects.filter(customer=customer, is_active=True)
-        
-        # Get enhanced dashboard statistics
-        stats = get_dashboard_stats(customer)
-        
+        return redirect("customer_dashboard_ui", dashboard_uuid=customer.dashboard_url)
     except Customer.DoesNotExist:
         messages.error(request, "Customer profile not found.")
         return redirect('customer_login')
-    
-    context = {
-        'customer': customer,
-        'devices': devices,
-        'dashboard_uuid': customer.dashboard_url,
-        'total_sensors': stats['total_sensors'],
-        'critical_alerts': stats['critical_alerts'],
-        'performance_avg': stats['performance_avg'],
-    }
-    
-    return render(request, 'customer_dashboard.html', context)
 @login_required
 def customer_dashboard_uuid(request, dashboard_uuid):
     customer = get_object_or_404(Customer, dashboard_url=dashboard_uuid, user=request.user)
