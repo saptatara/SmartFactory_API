@@ -68,7 +68,7 @@ class DeviceAdmin(CustomerSpecificAdmin):
         "is_active",
         "created_at",
         "api_keys",
-        "actions",
+        "quick_actions",
     ]
     list_filter = ["is_active", "device_type", "created_at", "customer"]
     search_fields = ["name", "location"]
@@ -84,25 +84,20 @@ class DeviceAdmin(CustomerSpecificAdmin):
         )
     api_keys.short_description = "API Keys"
 
-    def actions(self, obj):
+    def quick_actions(self, obj):
         return format_html(
             '<div class="action-buttons">'
-            '<a href="/api/ui/device/{}/" class="button" target="_blank">📊 View</a> '
-            '<a href="/api/ui/device/{}/fouling/" class="button" target="_blank">🔥 Fouling</a>'
+            '<a href="/api/ui/device/{}/" class="button" target="_blank" style="display: inline-block; padding: 4px 8px; background: #007bff; color: white; text-decoration: none; border-radius: 3px; margin-right: 5px; font-size: 12px;">📊 View</a>'
+            '<a href="/api/ui/device/{}/fouling/" class="button" target="_blank" style="display: inline-block; padding: 4px 8px; background: #fd7e14; color: white; text-decoration: none; border-radius: 3px; font-size: 12px;">🔥 Fouling</a>'
             '</div>',
             obj.id, obj.id
         )
-    actions.short_description = "Actions"
+    quick_actions.short_description = "Quick Actions"
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         if db_field.name == "customer" and not request.user.is_superuser:
             kwargs["queryset"] = Customer.objects.filter(user=request.user)
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
-
-    class Media:
-        css = {
-            'all': ('admin/css/custom_admin.css',)
-        }
 
 
 @admin.register(SensorType)
@@ -169,10 +164,6 @@ class IoTDataAdmin(CustomerSpecificAdmin):
     readonly_fields = ["created_at"]
     date_hierarchy = "created_at"
 
-    class Meta:
-        verbose_name = "IoT Data"
-        verbose_name_plural = "IoT Data"
-
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         if request.user.is_superuser:
@@ -194,10 +185,6 @@ class FoulingDataAdmin(CustomerSpecificAdmin):
     search_fields = ["device__name", "severity", "recommendation"]
     readonly_fields = ["calculated_at"]
     date_hierarchy = "calculated_at"
-    
-    class Meta:
-        verbose_name = "Fouling Data"
-        verbose_name_plural = "Fouling Data"
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
