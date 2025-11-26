@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Device Data</title>
+</head>
+<body>
+    <h1>Debug: Device {{ device.name }}</h1>
+    
+    <h2>Raw Sensor Data</h2>
+    <pre id="sensorDataJson"></pre>
+    
+    <h2>Sensor Readings Count: {{ sensor_readings|length }}</h2>
+    
+    <script>
+        // Display the JSON data that's passed to the template
+        const sensorData = {{ sensor_data_json|safe }};
+        document.getElementById('sensorDataJson').textContent = JSON.stringify(sensorData, null, 2);
+        
+        console.log("Sensor Data:", sensorData);
+    </script>
+</body>
+</html>

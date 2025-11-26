@@ -1190,3 +1190,34 @@ def get_dashboard_stats(customer):
         'critical_alerts': critical_alerts,
         'performance_avg': round(performance_avg, 1)
     }
+@login_required
+def debug_device_data(request, device_id):
+    """Debug view to check what data is available for frontend"""
+    device = get_object_or_404(Device, id=device_id)
+    
+    # Get sensor data exactly like your dashboard does
+    sensor_readings = latest_chronological(SensorData.objects.filter(device=device), 50)
+    
+    print(f"=== DEBUG: Device {device.name} ===")
+    print(f"Total sensor readings: {len(sensor_readings)}")
+    
+    sensor_data = defaultdict(list)
+    for r in sensor_readings:
+        ist_timestamp = format_ist_timestamp(r.created_at)
+        sensor_data[r.sensor_config.sensor_label].append({
+            "timestamp": ist_timestamp,
+            "value": r.value,
+        })
+        print(f"  - {r.sensor_config.sensor_label}: {r.value} at {ist_timestamp}")
+    
+    # Check what's being passed to template
+    context = {
+        "device": device,
+        "sensor_readings": sensor_readings,
+        "sensor_data_json": json.dumps(sensor_data),
+    }
+    
+    print(f"Sensor data keys: {list(sensor_data.keys())}")
+    print(f"Sensor data JSON length: {len(json.dumps(sensor_data))}")
+    
+    return render(request, "api/debug_device_data.html", context)

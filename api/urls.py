@@ -64,4 +64,5 @@ urlpatterns = [
         views.device_sensor_report_csv,
         name="device_sensor_report_csv",
     ),
+path('debug/device/<int:device_id>/', views.debug_device_data, name='debug_device_data'),
 ]
