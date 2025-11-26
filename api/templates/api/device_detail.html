@@ -174,50 +174,49 @@
 
     <!-- Sensor Charts Grid -->
     <div class="col-12 col-lg-8">
-        <div class="row g-4">
-            {% for sensor_label, readings in sensor_data.items %}
-            <div class="col-12 col-md-6">
-                <div class="sensor-card">
-                    <div class="sensor-card-header">
-                        <div>
-                            <h6 class="mb-0">{{ sensor_label|upper }}</h6>
+        <div class="row g-4" id="sensor-charts-container">
+            {% if sensor_data %}
+                {% for sensor_label, readings in sensor_data.items %}
+                <div class="col-12 col-md-6">
+                    <div class="sensor-card">
+                        <div class="sensor-card-header">
+                            <div>
+                                <h6 class="mb-0">{{ sensor_label|upper }}</h6>
+                                {% if readings %}
+                                    <small class="text-muted">
+                                        Last: {{ readings.0.value }} 
+                                    </small>
+                                {% endif %}
+                            </div>
+                            <span class="sensor-label-chip">{{ sensor_label }}</span>
+                        </div>
+
+                        <div class="card-body">
+                            <div class="chart-container">
+                                <canvas id="chart-{{ sensor_label|slugify }}"></canvas>
+                            </div>
+
                             {% if readings %}
-                                <small class="text-muted">
-                                    Last: {{ readings.0.value }} 
-                                    <!-- Removed unit since it doesn't exist in our data -->
-                                </small>
+                            <div class="sensor-stats">
+                                <div class="stat-item">
+                                    <div class="stat-value {% if 'temp' in sensor_label.lower %}temperature{% elif 'press' in sensor_label.lower %}pressure{% elif 'flow' in sensor_label.lower %}flow{% else %}generic{% endif %}">
+                                        {{ readings.0.value }}
+                                    </div>
+                                    <div class="stat-label">Current</div>
+                                </div>
+                                <div class="stat-item">
+                                    <div class="stat-value text-muted">
+                                        {{ readings|length }}
+                                    </div>
+                                    <div class="stat-label">Readings</div>
+                                </div>
+                            </div>
                             {% endif %}
                         </div>
-                        <span class="sensor-label-chip">{{ sensor_label }}</span>
-                    </div>
-
-                    <div class="card-body">
-                        <div class="chart-container">
-                            <!-- DEBUG: Check what ID is being generated -->
-                            <!-- <div style="display: none;" id="debug-{{ sensor_label }}">canvas-id: chart-{{ sensor_label|slugify }}</div> -->
-                            <canvas id="chart-{{ sensor_label|slugify }}"></canvas>
-                        </div>
-
-                        {% if readings %}
-                        <div class="sensor-stats">
-                            <div class="stat-item">
-                                <div class="stat-value {% if 'temp' in sensor_label.lower %}temperature{% elif 'press' in sensor_label.lower %}pressure{% elif 'flow' in sensor_label.lower %}flow{% else %}generic{% endif %}">
-                                    {{ readings.0.value }}
-                                </div>
-                                <div class="stat-label">Current</div>
-                            </div>
-                            <div class="stat-item">
-                                <div class="stat-value text-muted">
-                                    {{ readings|length }}
-                                </div>
-                                <div class="stat-label">Readings</div>
-                            </div>
-                        </div>
-                        {% endif %}
                     </div>
                 </div>
-            </div>
-            {% empty %}
+                {% endfor %}
+            {% else %}
             <div class="col-12">
                 <div class="card">
                     <div class="card-body text-center py-5">
@@ -229,7 +228,7 @@
                     </div>
                 </div>
             </div>
-            {% endfor %}
+            {% endif %}
         </div>
     </div>
 </div>
@@ -256,39 +255,96 @@ document.addEventListener('DOMContentLoaded', function() {
     
     console.log("Available sensor data:", Object.keys(sensorData));
     
-    // Debug: Check what canvas elements actually exist
-    const allCanvases = Array.from(document.querySelectorAll('canvas'));
-    console.log('All canvas elements on page:', allCanvases.map(c => c.id));
+    // Check if we have sensor data but no canvas elements (template issue)
+    if (Object.keys(sensorData).length > 0) {
+        const sensorChartsContainer = document.getElementById('sensor-charts-container');
+        const noDataMessage = sensorChartsContainer.querySelector('.card-body.text-center');
+        
+        // If no data message is shown but we have data, dynamically create the charts
+        if (noDataMessage && Object.keys(sensorData).length > 0) {
+            console.log("Data exists but template shows no data message. Creating charts dynamically...");
+            createChartsDynamically(sensorData, sensorChartsContainer);
+            return;
+        }
+    }
     
+    // Normal chart initialization
+    initializeCharts(sensorData);
+});
+
+function createChartsDynamically(sensorData, container) {
+    // Remove the no data message
+    const noDataCard = container.querySelector('.col-12');
+    if (noDataCard) {
+        noDataCard.remove();
+    }
+    
+    // Create chart cards dynamically
     Object.keys(sensorData).forEach((sensorLabel, index) => {
         const readings = sensorData[sensorLabel];
+        if (!readings || readings.length === 0) return;
         
-        // Try multiple possible ID formats to find the canvas
-        const possibleIds = [
-            `chart-${sensorLabel.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
-            `chart-${sensorLabel.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`,
-            `chart-${sensorLabel}`,
-            `chart-${sensorLabel.replace('_', '-')}`,
-            `chart-${sensorLabel.replace('-', '_')}`
-        ];
+        const colDiv = document.createElement('div');
+        colDiv.className = 'col-12 col-md-6';
         
-        let canvas = null;
-        let foundId = null;
+        colDiv.innerHTML = `
+            <div class="sensor-card">
+                <div class="sensor-card-header">
+                    <div>
+                        <h6 class="mb-0">${sensorLabel.toUpperCase()}</h6>
+                        <small class="text-muted">
+                            Last: ${readings[0].value}
+                        </small>
+                    </div>
+                    <span class="sensor-label-chip">${sensorLabel}</span>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="chart-${sensorLabel.replace(/[^a-z0-9]/g, '-')}"></canvas>
+                    </div>
+                    <div class="sensor-stats">
+                        <div class="stat-item">
+                            <div class="stat-value ${getSensorTypeClass(sensorLabel)}">
+                                ${readings[0].value}
+                            </div>
+                            <div class="stat-label">Current</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value text-muted">
+                                ${readings.length}
+                            </div>
+                            <div class="stat-label">Readings</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
         
-        for (const id of possibleIds) {
-            canvas = document.getElementById(id);
-            if (canvas) {
-                foundId = id;
-                break;
-            }
-        }
+        container.appendChild(colDiv);
+    });
+    
+    // Now initialize the charts
+    setTimeout(() => initializeCharts(sensorData), 100);
+}
 
-        console.log(`Creating chart for ${sensorLabel}, trying IDs:`, possibleIds);
-        console.log(`Found canvas:`, canvas ? `Yes (${foundId})` : 'No');
+function getSensorTypeClass(sensorLabel) {
+    const label = sensorLabel.toLowerCase();
+    if (label.includes('temp')) return 'temperature';
+    if (label.includes('press')) return 'pressure';
+    if (label.includes('flow')) return 'flow';
+    return 'generic';
+}
+
+function initializeCharts(sensorData) {
+    Object.keys(sensorData).forEach((sensorLabel, index) => {
+        const readings = sensorData[sensorLabel];
+        const canvasId = `chart-${sensorLabel.replace(/[^a-z0-9]/g, '-')}`;
+        const canvas = document.getElementById(canvasId);
+
+        console.log(`Creating chart for ${sensorLabel} on canvas ${canvasId}`);
         
         if (!canvas) {
-            console.error(`Canvas not found for sensor: ${sensorLabel}`);
-            console.log('Available canvas IDs:', allCanvases.map(c => c.id));
+            console.error(`Canvas not found: ${canvasId}`);
             return;
         }
 
@@ -300,8 +356,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const color = chartColors[index % chartColors.length];
         const labels = readings.map(r => r.timestamp);
         const values = readings.map(r => r.value);
-
-        console.log(`Chart data for ${sensorLabel}:`, { labels, values });
 
         try {
             new Chart(canvas, {
@@ -361,7 +415,7 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error(`❌ Error creating chart for ${sensorLabel}:`, error);
         }
     });
-});
+}
 
 // Auto-refresh data every 30 seconds
 setTimeout(() => {
