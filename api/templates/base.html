@@ -283,12 +283,7 @@
                             <i class="fas fa-calculator me-1"></i>Fouling Calculator
                         </a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if 'fouling' in request.resolver_match.url_name %}active{% endif %}" 
-                           href="{% url 'fouling_monitoring' request.device.id %}" {% if not request.device %}style="display:none"{% endif %}>
-                            <i class="fas fa-fire me-1"></i>Fouling Analysis
-                        </a>
-                    </li>
+                    <!-- REMOVED the problematic fouling_monitoring link from navbar -->
                 {% endif %}
             </ul>
 
