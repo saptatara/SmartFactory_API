@@ -175,60 +175,7 @@
     <!-- Sensor Charts Grid -->
     <div class="col-12 col-lg-8">
         <div class="row g-4" id="sensor-charts-container">
-            {% if sensor_data %}
-                {% for sensor_label, readings in sensor_data.items %}
-                <div class="col-12 col-md-6">
-                    <div class="sensor-card">
-                        <div class="sensor-card-header">
-                            <div>
-                                <h6 class="mb-0">{{ sensor_label|upper }}</h6>
-                                {% if readings %}
-                                    <small class="text-muted">
-                                        Last: {{ readings.0.value }} 
-                                    </small>
-                                {% endif %}
-                            </div>
-                            <span class="sensor-label-chip">{{ sensor_label }}</span>
-                        </div>
-
-                        <div class="card-body">
-                            <div class="chart-container">
-                                <canvas id="chart-{{ sensor_label|slugify }}"></canvas>
-                            </div>
-
-                            {% if readings %}
-                            <div class="sensor-stats">
-                                <div class="stat-item">
-                                    <div class="stat-value {% if 'temp' in sensor_label.lower %}temperature{% elif 'press' in sensor_label.lower %}pressure{% elif 'flow' in sensor_label.lower %}flow{% else %}generic{% endif %}">
-                                        {{ readings.0.value }}
-                                    </div>
-                                    <div class="stat-label">Current</div>
-                                </div>
-                                <div class="stat-item">
-                                    <div class="stat-value text-muted">
-                                        {{ readings|length }}
-                                    </div>
-                                    <div class="stat-label">Readings</div>
-                                </div>
-                            </div>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-                {% endfor %}
-            {% else %}
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-body text-center py-5">
-                        <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
-                        <h5 class="text-muted">No Sensor Data Available</h5>
-                        <p class="text-muted mb-0">
-                            Sensor data will appear here once the device starts sending measurements.
-                        </p>
-                    </div>
-                </div>
-            </div>
-            {% endif %}
+            <!-- Charts will be dynamically created here by JavaScript -->
         </div>
     </div>
 </div>
@@ -255,31 +202,35 @@ document.addEventListener('DOMContentLoaded', function() {
     
     console.log("Available sensor data:", Object.keys(sensorData));
     
-    // Check if we have sensor data but no canvas elements (template issue)
-    if (Object.keys(sensorData).length > 0) {
-        const sensorChartsContainer = document.getElementById('sensor-charts-container');
-        const noDataMessage = sensorChartsContainer.querySelector('.card-body.text-center');
-        
-        // If no data message is shown but we have data, dynamically create the charts
-        if (noDataMessage && Object.keys(sensorData).length > 0) {
-            console.log("Data exists but template shows no data message. Creating charts dynamically...");
-            createChartsDynamically(sensorData, sensorChartsContainer);
-            return;
-        }
+    const sensorChartsContainer = document.getElementById('sensor-charts-container');
+    
+    if (Object.keys(sensorData).length === 0) {
+        // Show no data message
+        sensorChartsContainer.innerHTML = `
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body text-center py-5">
+                        <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">No Sensor Data Available</h5>
+                        <p class="text-muted mb-0">
+                            Sensor data will appear here once the device starts sending measurements.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        `;
+        return;
     }
     
-    // Normal chart initialization
-    initializeCharts(sensorData);
+    // Create charts dynamically
+    createChartsDynamically(sensorData, sensorChartsContainer);
 });
 
 function createChartsDynamically(sensorData, container) {
-    // Remove the no data message
-    const noDataCard = container.querySelector('.col-12');
-    if (noDataCard) {
-        noDataCard.remove();
-    }
+    // Clear container
+    container.innerHTML = '';
     
-    // Create chart cards dynamically
+    // Create chart cards for each sensor
     Object.keys(sensorData).forEach((sensorLabel, index) => {
         const readings = sensorData[sensorLabel];
         if (!readings || readings.length === 0) return;
@@ -323,7 +274,7 @@ function createChartsDynamically(sensorData, container) {
         container.appendChild(colDiv);
     });
     
-    // Now initialize the charts
+    // Initialize charts after a short delay to ensure DOM is updated
     setTimeout(() => initializeCharts(sensorData), 100);
 }
 
@@ -345,6 +296,7 @@ function initializeCharts(sensorData) {
         
         if (!canvas) {
             console.error(`Canvas not found: ${canvasId}`);
+            console.log('Available canvas elements:', Array.from(document.querySelectorAll('canvas')).map(c => c.id));
             return;
         }
 
@@ -354,7 +306,15 @@ function initializeCharts(sensorData) {
         }
 
         const color = chartColors[index % chartColors.length];
-        const labels = readings.map(r => r.timestamp);
+        const labels = readings.map(r => {
+            // Format timestamp for better display
+            const date = new Date(r.timestamp);
+            return date.toLocaleTimeString('en-IN', { 
+                hour: '2-digit', 
+                minute: '2-digit',
+                second: '2-digit'
+            });
+        });
         const values = readings.map(r => r.value);
 
         try {
@@ -368,8 +328,8 @@ function initializeCharts(sensorData) {
                         borderWidth: 2,
                         borderColor: color.border,
                         backgroundColor: color.fill,
-                        pointRadius: 0,
-                        pointHoverRadius: 4,
+                        pointRadius: 2,
+                        pointHoverRadius: 5,
                         tension: 0.4,
                         fill: true,
                     }]
@@ -391,8 +351,15 @@ function initializeCharts(sensorData) {
                     },
                     scales: {
                         x: {
-                            display: false,
-                            grid: { display: false }
+                            display: true,
+                            grid: { 
+                                display: false,
+                                color: 'rgba(148, 163, 184, 0.1)'
+                            },
+                            ticks: {
+                                color: 'rgba(148, 163, 184, 0.8)',
+                                maxTicksLimit: 5
+                            }
                         },
                         y: {
                             beginAtZero: false,
