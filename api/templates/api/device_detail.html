@@ -256,13 +256,16 @@ document.addEventListener('DOMContentLoaded', function() {
     
     Object.keys(sensorData).forEach((sensorLabel, index) => {
         const readings = sensorData[sensorLabel];
-        const canvasId = `chart-${sensorLabel.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()}`;
+        
+        // Use the same slugify logic as Django template
+        const canvasId = `chart-${sensorLabel.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
         const canvas = document.getElementById(canvasId);
 
         console.log(`Creating chart for ${sensorLabel} on canvas ${canvasId}`);
         
         if (!canvas) {
             console.error(`Canvas not found: ${canvasId}`);
+            console.log('Available canvas elements:', Array.from(document.querySelectorAll('canvas')).map(c => c.id));
             return;
         }
 
