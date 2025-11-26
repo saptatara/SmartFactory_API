@@ -62,18 +62,18 @@ fi
 echo "⏳ Waiting for database to be ready..."
 sleep 10
 
-# Step 1: Run migrations FIRST to ensure all tables exist
-echo "🛠️ Running database migrations..."
+# Step 1: Create migrations and apply them
+echo "🛠️ Creating and running database migrations..."
+docker compose --env-file "$ENV_FILE" -p "${PROJECT}" exec -T web python manage.py makemigrations api --noinput
 docker compose --env-file "$ENV_FILE" -p "${PROJECT}" exec -T web python manage.py migrate --noinput
 
 # Step 2: Check if migrations were successful
 echo "🔍 Checking database state..."
 docker compose --env-file "$ENV_FILE" -p "${PROJECT}" exec -T web python manage.py check --database default
 
-# Run the Django creation block inside the tenant web container
+# Run the Django creation block inside the tenant web container WITHOUT transaction.atomic()
 docker compose --env-file "$ENV_FILE" -p "${PROJECT}" exec -T web python manage.py shell <<PY
 from django.contrib.auth import get_user_model
-from django.db import transaction
 from api.models import Customer, Device, SensorConfiguration, SensorType, FoulingData
 import uuid
 
@@ -98,17 +98,18 @@ def safe_print(title, obj):
     print(obj)
     print()
 
-with transaction.atomic():
-    # Check if we should delete the sample device first (with error handling)
-    try:
-        sample_device = Device.objects.filter(name='Heat Exchanger Unit #1').first()
-        if sample_device:
-            print("Found sample device 'Heat Exchanger Unit #1' - removing it...")
-            sample_device.delete()
-            print("Sample device removed")
-    except Exception as e:
-        print(f"⚠️  Could not remove sample device (might not exist yet): {e}")
+# Remove sample device first (outside of any transaction)
+try:
+    sample_device = Device.objects.filter(name='Heat Exchanger Unit #1').first()
+    if sample_device:
+        print("Found sample device 'Heat Exchanger Unit #1' - removing it...")
+        sample_device.delete()
+        print("Sample device removed")
+except Exception as e:
+    print(f"⚠️  Could not remove sample device: {e}")
 
+# Create user
+try:
     user, created = User.objects.get_or_create(username=USERNAME, defaults={"email": EMAIL})
     if created:
         user.set_password(PASSWORD)
@@ -123,7 +124,12 @@ with transaction.atomic():
         user.is_superuser = True
         user.save()
     safe_print("User", f"{user.username} (id={user.pk})")
+except Exception as e:
+    print(f"❌ Failed to create user: {e}")
+    exit(1)
 
+# Create customer
+try:
     customer, c_created = Customer.objects.get_or_create(
         user=user, 
         defaults={
@@ -136,16 +142,21 @@ with transaction.atomic():
         customer.company_name = COMPANY_NAME
         customer.save()
     safe_print("Customer", f"{customer.company_name} (id={customer.pk}) linked to user {user.username}")
+except Exception as e:
+    print(f"❌ Failed to create customer: {e}")
+    exit(1)
 
-    # Delete any existing device with the same name to avoid duplicates
-    try:
-        existing_devices = Device.objects.filter(name=DEVICE_NAME, customer=customer)
-        if existing_devices.exists():
-            print(f"Removing existing device '{DEVICE_NAME}'...")
-            existing_devices.delete()
-    except Exception as e:
-        print(f"⚠️  Could not remove existing devices: {e}")
+# Delete any existing device with the same name
+try:
+    existing_devices = Device.objects.filter(name=DEVICE_NAME, customer=customer)
+    if existing_devices.exists():
+        print(f"Removing existing device '{DEVICE_NAME}'...")
+        existing_devices.delete()
+except Exception as e:
+    print(f"⚠️  Could not remove existing devices: {e}")
 
+# Create new device
+try:
     device = Device.objects.create(
         name=DEVICE_NAME, 
         customer=customer, 
@@ -153,21 +164,33 @@ with transaction.atomic():
         location="Main Production Line"
     )
     print(f"✅ Created Device '{DEVICE_NAME}' for customer '{customer.company_name}'")
+except Exception as e:
+    print(f"❌ Failed to create device: {e}")
+    exit(1)
 
-    wa = getattr(device, "write_api_key", None)
-    ra = getattr(device, "read_api_key", None)
-    safe_print("Device API keys", {"write_api_key": wa, "read_api_key": ra})
+wa = getattr(device, "write_api_key", None)
+ra = getattr(device, "read_api_key", None)
+safe_print("Device API keys", {"write_api_key": wa, "read_api_key": ra})
 
-    sensor_type_map = {}
-    for label, type_name, unit in SENSOR_CONFIGS:
+# Create sensor types and configurations
+sensor_type_map = {}
+for label, type_name, unit in SENSOR_CONFIGS:
+    try:
         st, st_created = SensorType.objects.get_or_create(name=type_name, defaults={"unit": unit})
         sensor_type_map[type_name] = st
         if st_created:
             print(f"Created SensorType '{type_name}' (unit={unit})")
+    except Exception as e:
+        print(f"⚠️  Failed to create sensor type {type_name}: {e}")
 
-    created_cfgs = []
-    for sensor_label, type_name, unit in SENSOR_CONFIGS:
-        st = sensor_type_map[type_name]
+created_cfgs = []
+for sensor_label, type_name, unit in SENSOR_CONFIGS:
+    try:
+        st = sensor_type_map.get(type_name)
+        if not st:
+            print(f"⚠️  Sensor type {type_name} not found, skipping {sensor_label}")
+            continue
+            
         cfg, cfg_created = SensorConfiguration.objects.get_or_create(
             device=device,
             sensor_label=sensor_label,
@@ -178,50 +201,52 @@ with transaction.atomic():
             print(f"✅ Created SensorConfiguration: {sensor_label} (type={type_name})")
         else:
             print(f"ℹ️  SensorConfiguration exists: {sensor_label}")
-
-    # Create sample fouling data for the device (with error handling)
-    try:
-        fouling_data, fd_created = FoulingData.objects.get_or_create(
-            device=device,
-            defaults={
-                'fouling_factor': 0.00015,
-                'u_actual': 650.0,
-                'u_clean': 800.0,
-                'performance_ratio': 0.81,
-                'heat_duty': 150000.0,
-                'lmtd': 28.5,
-                'severity': 'Minor Fouling',
-                'recommendation': 'Monitor closely, consider routine cleaning during next maintenance',
-                'risk_level': 'Low'
-            }
-        )
-        
-        if fd_created:
-            print("✅ Created sample fouling data for device")
-        else:
-            print("ℹ️  Fouling data already exists")
     except Exception as e:
-        print(f"⚠️  Could not create fouling data: {e}")
-        print("This might be because the FoulingData model isn't migrated yet")
+        print(f"⚠️  Failed to create sensor configuration {sensor_label}: {e}")
 
-    print("\\n" + "="*50)
-    print("🎯 SETUP COMPLETE - READY FOR ARDUINO DATA")
-    print("="*50)
-    print("User:", user.username)
-    print("Password:", PASSWORD)
-    print("Customer:", customer.company_name, "(id:", customer.pk, ")")
-    print("Device:", device.name, "(id:", device.pk, ")")
-    print("Write API Key:", wa)
-    print("Read API Key:", ra)
-    print("Sensor Configurations:", ", ".join(created_cfgs))
-    print("")
-    print("📝 Arduino Configuration:")
-    print("   Device ID:", device.pk)
-    print("   Write API Key:", wa)
-    print("   Server:", "150.241.244.250:${HTTP_PORT}")
-    print("")
-    print("🔗 Dashboard URL: http://150.241.244.250:${HTTP_PORT}/api/ui/dashboard/")
-    print("="*50)
+# Create sample fouling data for the device
+try:
+    fouling_data, fd_created = FoulingData.objects.get_or_create(
+        device=device,
+        defaults={
+            'fouling_factor': 0.00015,
+            'u_actual': 650.0,
+            'u_clean': 800.0,
+            'performance_ratio': 0.81,
+            'heat_duty': 150000.0,
+            'lmtd': 28.5,
+            'severity': 'Minor Fouling',
+            'recommendation': 'Monitor closely, consider routine cleaning during next maintenance',
+            'risk_level': 'Low'
+        }
+    )
+    
+    if fd_created:
+        print("✅ Created sample fouling data for device")
+    else:
+        print("ℹ️  Fouling data already exists")
+except Exception as e:
+    print(f"⚠️  Could not create fouling data: {e}")
+    print("This might be because the FoulingData model isn't migrated yet")
+
+print("\\n" + "="*50)
+print("🎯 SETUP COMPLETE - READY FOR ARDUINO DATA")
+print("="*50)
+print("User:", user.username)
+print("Password:", PASSWORD)
+print("Customer:", customer.company_name, "(id:", customer.pk, ")")
+print("Device:", device.name, "(id:", device.pk, ")")
+print("Write API Key:", wa)
+print("Read API Key:", ra)
+print("Sensor Configurations:", ", ".join(created_cfgs))
+print("")
+print("📝 Arduino Configuration:")
+print("   Device ID:", device.pk)
+print("   Write API Key:", wa)
+print("   Server:", "150.241.244.250:${HTTP_PORT}")
+print("")
+print("🔗 Dashboard URL: http://150.241.244.250:${HTTP_PORT}/api/ui/dashboard/")
+print("="*50)
 PY
 
 echo "✅ Setup completed for customer: $RAW_CUSTOMER"
