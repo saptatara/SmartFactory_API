@@ -14,7 +14,8 @@ from rest_framework.authentication import TokenAuthentication, BasicAuthenticati
 from rest_framework.response import Response
 from rest_framework import status
 from .models import (
-    Customer, Device, SensorConfiguration, SensorData, SensorType, IoTData
+    Customer, Device, DeviceType, SensorData, SensorConfiguration, 
+    SensorType, IoTData, FoulingData
 )
 from .serializers import DeviceSerializer, SensorDataSerializer, IoTDataSerializer
 from .forms import SensorDataForm
