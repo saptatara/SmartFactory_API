@@ -10,13 +10,13 @@ class Customer(models.Model):
     contact_email = models.EmailField()
     phone_number = models.CharField(max_length=15, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
-
+    
     # Customer-specific settings
     dashboard_url = models.UUIDField(default=uuid.uuid4, unique=True)
     alert_threshold = models.FloatField(default=0.8)
     receive_sms_alerts = models.BooleanField(default=True)
     receive_email_alerts = models.BooleanField(default=True)
-
+    
     def __str__(self):
         return self.company_name
 
@@ -38,7 +38,7 @@ class Device(models.Model):
     read_api_key = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     created_at = models.DateTimeField(auto_now_add=True)
     is_active = models.BooleanField(default=True)
-
+    
     def __str__(self):
         return f"{self.name} ({self.customer.company_name})"
 
@@ -74,10 +74,20 @@ class SensorData(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
-        indexes = [models.Index(fields=["device", "created_at"])]
+        indexes = [
+            models.Index(fields=["device", "created_at"]),
+            models.Index(fields=["sensor_config", "created_at"])
+        ]
+        verbose_name = "Sensor Data"
+        verbose_name_plural = "Sensor Data"
 
     def __str__(self):
         return f"{self.device.name} - {self.sensor_config.sensor_label}: {self.value}"
+
+    def unit_display(self):
+        """Method for admin display - returns the unit of the sensor"""
+        return self.sensor_config.sensor_type.unit
+    unit_display.short_description = 'Unit'
 
 
 class IoTData(models.Model):
