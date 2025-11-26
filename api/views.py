@@ -769,6 +769,9 @@ def device_detail(request, device_id):
     })
 
 
+from collections import defaultdict
+import json
+
 @login_required
 def device_detail_ui(request, device_id):
     device = get_object_or_404(Device, id=device_id)
@@ -797,6 +800,7 @@ def device_detail_ui(request, device_id):
     return render(request, "api/device_detail.html", {
         "device": device,
         "sensor_readings": sensor_readings,
+        "sensor_data": sensor_data,                 
         "sensor_data_json": json.dumps(sensor_data),
     })
 
