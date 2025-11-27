@@ -12,23 +12,23 @@
 <!-- Date Range Filter -->
 <div class="row mb-4">
     <div class="col-12">
-        <div class="card">
+        <div class="card bg-dark border-light">
             <div class="card-body">
-                <h6 class="card-title">Data Range Filter</h6>
+                <h6 class="card-title text-white">Data Range Filter</h6>
                 <form method="get" class="row g-3 align-items-end">
                     <div class="col-md-3">
-                        <label class="form-label">From Date</label>
-                        <input type="datetime-local" class="form-control" name="start_date" 
-                               value="{{ request.GET.start_date }}">
+                        <label class="form-label text-light">From Date</label>
+                        <input type="datetime-local" class="form-control bg-dark text-light border-secondary" 
+                               name="start_date" value="{{ request.GET.start_date }}">
                     </div>
                     <div class="col-md-3">
-                        <label class="form-label">To Date</label>
-                        <input type="datetime-local" class="form-control" name="end_date" 
-                               value="{{ request.GET.end_date }}">
+                        <label class="form-label text-light">To Date</label>
+                        <input type="datetime-local" class="form-control bg-dark text-light border-secondary" 
+                               name="end_date" value="{{ request.GET.end_date }}">
                     </div>
                     <div class="col-md-3">
-                        <label class="form-label">Data Points</label>
-                        <select class="form-select" name="limit">
+                        <label class="form-label text-light">Data Points</label>
+                        <select class="form-select bg-dark text-light border-secondary" name="limit">
                             <option value="50" {% if request.GET.limit == "50" %}selected{% endif %}>Last 50 readings</option>
                             <option value="100" {% if request.GET.limit == "100" %}selected{% endif %}>Last 100 readings</option>
                             <option value="200" {% if request.GET.limit == "200" %}selected{% endif %}>Last 200 readings</option>
@@ -36,18 +36,20 @@
                         </select>
                     </div>
                     <div class="col-md-3">
-                        <button type="submit" class="btn btn-primary w-100">Apply Filter</button>
+                        <button type="submit" class="btn btn-primary w-100" id="apply-filter">
+                            <i class="fas fa-filter me-1"></i>Apply Filter
+                        </button>
                     </div>
                 </form>
                 {% if request.GET.start_date or request.GET.end_date %}
                 <div class="mt-2">
-                    <small class="text-muted">
+                    <small class="text-light">
                         Filtered: 
                         {% if request.GET.start_date %}From {{ request.GET.start_date }}{% endif %}
                         {% if request.GET.end_date %} to {{ request.GET.end_date }}{% endif %}
                         {% if request.GET.limit and request.GET.limit != "0" %} | Limit: {{ request.GET.limit }} readings{% endif %}
                     </small>
-                    <a href="?" class="btn btn-sm btn-outline-secondary ms-2">Clear Filters</a>
+                    <a href="?" class="btn btn-sm btn-outline-light ms-2">Clear Filters</a>
                 </div>
                 {% endif %}
             </div>
@@ -58,69 +60,69 @@
 <div class="row g-4">
     <!-- Device Information Sidebar -->
     <div class="col-12 col-lg-4">
-        <div class="card h-100">
-            <div class="card-header d-flex align-items-center">
+        <div class="card h-100 bg-dark border-light">
+            <div class="card-header d-flex align-items-center border-light">
                 <i class="fas fa-info-circle me-2 text-primary"></i>
-                <h5 class="mb-0">Device Information</h5>
+                <h5 class="mb-0 text-white">Device Information</h5>
             </div>
-            <div class="card-body">
+            <div class="card-body text-light">
                 <div class="mb-3">
-                    <strong class="text-muted d-block mb-1">Device ID</strong>
-                    <span class="h6">{{ device.id }}</span>
+                    <strong class="text-light d-block mb-1">Device ID</strong>
+                    <span class="h6 text-white">{{ device.id }}</span>
                 </div>
 
                 {% if device.location %}
                 <div class="mb-3">
-                    <strong class="text-muted d-block mb-1">Location</strong>
-                    <span><i class="fas fa-map-marker-alt me-2 text-muted"></i>{{ device.location }}</span>
+                    <strong class="text-light d-block mb-1">Location</strong>
+                    <span class="text-white"><i class="fas fa-map-marker-alt me-2 text-muted"></i>{{ device.location }}</span>
                 </div>
                 {% endif %}
 
                 <div class="mb-3">
-                    <strong class="text-muted d-block mb-1">Status</strong>
+                    <strong class="text-light d-block mb-1">Status</strong>
                     {% if device.is_active %}
-                        <span class="badge bg-success badge-soft">
+                        <span class="badge bg-success">
                             <i class="fas fa-check-circle me-1"></i>Active
                         </span>
                     {% else %}
-                        <span class="badge bg-secondary badge-soft">
+                        <span class="badge bg-secondary">
                             <i class="fas fa-pause-circle me-1"></i>Inactive
                         </span>
                     {% endif %}
                 </div>
 
                 <div class="mb-3">
-                    <strong class="text-muted d-block mb-1">Created</strong>
-                    <span>{{ device.created_at|date:"M d, Y" }}</span>
+                    <strong class="text-light d-block mb-1">Created</strong>
+                    <span class="text-white">{{ device.created_at|date:"M d, Y" }}</span>
                 </div>
 
-                <hr class="my-3">
+                <hr class="my-3 border-light">
 
                 <!-- Updated CSV Export with Date Range -->
                 <div class="d-grid gap-2">
-                    <a href="{% url 'customer_dashboard' %}" class="btn btn-outline-primary">
+                    <a href="{% url 'customer_dashboard' %}" class="btn btn-outline-light" id="dashboard-btn">
                         <i class="fas fa-arrow-left me-1"></i>Back to Dashboard
                     </a>
-                    <a href="{% url 'fouling_monitoring' device.id %}" class="btn btn-warning">
+                    <a href="{% url 'fouling_monitoring' device.id %}" class="btn btn-warning" id="fouling-btn">
                         <i class="fas fa-fire me-1"></i>Fouling Analysis
                     </a>
                     
                     <div class="btn-group-vertical" role="group">
                         <!-- Sensor CSV with current filters -->
                         <a href="{% url 'device_sensor_report_csv' device.id %}?{% for key, value in request.GET.items %}{% if key != 'limit' %}{{ key }}={{ value }}&{% endif %}{% endfor %}" 
-                           class="btn btn-outline-success btn-sm">
+                           class="btn btn-outline-success btn-sm" id="sensor-csv-btn">
                             <i class="fas fa-file-csv me-1"></i>Export Sensor CSV
                             {% if request.GET.start_date or request.GET.end_date %}
-                            <br><small>(With Current Filters)</small>
+                            <br><small class="text-light">(With Current Filters)</small>
                             {% endif %}
                         </a>
                         
                         <!-- Fouling CSV with current filters -->
                         <a href="{% url 'device_fouling_report_csv' device.id %}?{% for key, value in request.GET.items %}{% if key != 'limit' %}{{ key }}={{ value }}&{% endif %}{% endfor %}" 
-                           class="btn btn-outline-info btn-sm">
+                           class="btn btn-outline-info btn-sm" id="fouling-csv-btn">
                             <i class="fas fa-file-csv me-1"></i>Export Fouling CSV
                             {% if request.GET.start_date or request.GET.end_date %}
-                            <br><small>(With Current Filters)</small>
+                            <br><small class="text-light">(With Current Filters)</small>
                             {% endif %}
                         </a>
                     </div>
@@ -134,10 +136,10 @@
         <div class="row g-4" id="charts-container">
             <!-- Loading placeholder -->
             <div class="col-12">
-                <div class="card">
+                <div class="card bg-dark border-light">
                     <div class="card-body text-center py-5">
                         <div class="spinner-border text-primary mb-3"></div>
-                        <p class="text-muted mb-0">Loading sensor data and charts...</p>
+                        <p class="text-light mb-0">Loading sensor data and charts...</p>
                         {% if request.GET.start_date or request.GET.end_date %}
                         <small class="text-muted">With applied filters</small>
                         {% endif %}
@@ -151,8 +153,57 @@
 
 {% block extra_js %}
 <script>
+// Utility function to format dates in IST
+function formatIST(timestamp) {
+    const date = new Date(timestamp);
+    return date.toLocaleString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    });
+}
+
+// Utility function for chart time display
+function formatChartTime(timestamp) {
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    });
+}
+
+// Add loading states to buttons for better UX
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Loading sensor data with filters...');
+    
+    // Add loading states to buttons
+    const buttons = ['apply-filter', 'dashboard-btn', 'fouling-btn', 'sensor-csv-btn', 'fouling-csv-btn'];
+    buttons.forEach(btnId => {
+        const btn = document.getElementById(btnId);
+        if (btn) {
+            btn.addEventListener('click', function(e) {
+                const originalText = this.innerHTML;
+                this.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Loading...';
+                this.disabled = true;
+                
+                // Revert after 5 seconds if still on same page (fallback)
+                setTimeout(() => {
+                    if (this.innerHTML.includes('fa-spinner')) {
+                        this.innerHTML = originalText;
+                        this.disabled = false;
+                    }
+                }, 5000);
+            });
+        }
+    });
     
     const sensorData = {{ sensor_data_json|safe }};
     const container = document.getElementById('charts-container');
@@ -162,11 +213,11 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!sensorData || Object.keys(sensorData).length === 0) {
         container.innerHTML = `
             <div class="col-12">
-                <div class="card">
+                <div class="card bg-dark border-light">
                     <div class="card-body text-center py-5">
                         <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
-                        <h5 class="text-muted">No Sensor Data Available</h5>
-                        <p class="text-muted mb-0">
+                        <h5 class="text-light">No Sensor Data Available</h5>
+                        <p class="text-muted">
                             No data found for the selected filters.
                             {% if request.GET.start_date or request.GET.end_date %}
                             <br>Try adjusting your date range or clear filters.
@@ -190,18 +241,18 @@ document.addEventListener('DOMContentLoaded', function() {
         const colDiv = document.createElement('div');
         colDiv.className = 'col-12 col-md-6 mb-4';
         colDiv.innerHTML = `
-            <div class="card h-100">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h6 class="mb-0">${sensorLabel.toUpperCase()}</h6>
+            <div class="card h-100 bg-dark border-light">
+                <div class="card-header d-flex justify-content-between align-items-center border-light">
+                    <h6 class="mb-0 text-white">${sensorLabel.toUpperCase()}</h6>
                     <span class="badge" style="background-color: ${color}">${sensorLabel}</span>
                 </div>
-                <div class="card-body">
+                <div class="card-body text-light">
                     <div style="height: 200px;">
                         <canvas id="chart-${sensorLabel}"></canvas>
                     </div>
                     <div class="row mt-3 text-center">
                         <div class="col-4">
-                            <div class="h5">${readings[0]?.value || 'N/A'}</div>
+                            <div class="h5 text-white">${readings[0]?.value || 'N/A'}</div>
                             <small class="text-muted">Current</small>
                         </div>
                         <div class="col-4">
@@ -209,7 +260,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             <small class="text-muted">Readings</small>
                         </div>
                         <div class="col-4">
-                            <div class="h5 text-muted">${readings[readings.length-1]?.timestamp ? new Date(readings[readings.length-1].timestamp).toLocaleDateString() : 'N/A'}</div>
+                            <div class="h5 text-muted">${readings[readings.length-1]?.timestamp ? formatIST(readings[readings.length-1].timestamp).split(',')[0] : 'N/A'}</div>
                             <small class="text-muted">Last Update</small>
                         </div>
                     </div>
@@ -228,15 +279,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             if (!canvas || !readings || readings.length === 0) return;
             
-            const labels = readings.map(r => {
-                const date = new Date(r.timestamp);
-                return date.toLocaleTimeString('en-IN', { 
-                    hour: '2-digit', 
-                    minute: '2-digit',
-                    second: '2-digit'
-                });
-            });
-            
+            const labels = readings.map(r => formatChartTime(r.timestamp));
             const values = readings.map(r => r.value);
             
             try {
@@ -263,13 +306,23 @@ document.addEventListener('DOMContentLoaded', function() {
                             legend: { display: false },
                             tooltip: {
                                 mode: 'index',
-                                intersect: false
+                                intersect: false,
+                                callbacks: {
+                                    title: function(tooltipItems) {
+                                        // Show full IST timestamp in tooltip
+                                        const dataIndex = tooltipItems[0].dataIndex;
+                                        return formatIST(readings[dataIndex].timestamp);
+                                    }
+                                }
                             }
                         },
                         scales: {
                             x: { 
                                 display: readings.length <= 20,
-                                grid: { display: false },
+                                grid: { 
+                                    display: false,
+                                    color: 'rgba(255,255,255,0.1)'
+                                },
                                 ticks: {
                                     maxTicksLimit: 10,
                                     color: '#94a3b8'
@@ -295,4 +348,51 @@ document.addEventListener('DOMContentLoaded', function() {
     }, 100);
 });
 </script>
+
+<style>
+/* Improve readability and responsiveness */
+.card.bg-dark {
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%) !important;
+}
+
+.text-light {
+    color: #f8fafc !important;
+}
+
+.text-muted {
+    color: #94a3b8 !important;
+}
+
+.form-control.bg-dark:focus {
+    background-color: #1e293b !important;
+    border-color: #3b82f6 !important;
+    color: #f8fafc !important;
+}
+
+.btn {
+    transition: all 0.3s ease;
+}
+
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Loading animation */
+.fa-spinner {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Improve chart readability */
+.chart-container {
+    background: rgba(255,255,255,0.02);
+    border-radius: 8px;
+    padding: 10px;
+}
+</style>
 {% endblock %}
