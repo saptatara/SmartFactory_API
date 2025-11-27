@@ -6,108 +6,253 @@
     <title>Customer Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Bootstrap for better styling -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <style>
-        body { font-family: Arial, sans-serif; background: #f4f6f8; padding: 20px; }
-        h1 { text-align: center; margin-bottom: 30px; color: #333; }
-        .device-card { background: #fff; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.08); margin-bottom: 20px; padding: 20px; transition: transform 0.2s; }
-        .device-card:hover { transform: translateY(-5px); }
-        .device-card h2 { margin-top: 0; color: #222; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { padding: 8px 12px; text-align: left; }
-        th { background: #007bff; color: white; text-transform: uppercase; }
-        tr:nth-child(even) { background: #f9f9f9; }
-        .sensor-value { font-weight: bold; }
-        .T { color: #e74c3c; }   /* Temperature */
-        .P { color: #3498db; }   /* Pressure */
-        .F { color: #27ae60; }   /* Flow */
-        .G { color: #8e44ad; }   /* Generic */
-        
-        /* Fouling Status Styles */
-        .fouling-status { 
-            margin: 15px 0; 
-            padding: 15px; 
-            border-radius: 8px; 
-            border-left: 5px solid;
+        :root {
+            --bg-main: #0f172a;
+            --bg-card: #1e293b;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent-primary: #3b82f6;
         }
-        .fouling-green { background: #d4edda; border-color: #28a745; }
-        .fouling-blue { background: #d1ecf1; border-color: #17a2b8; }
-        .fouling-yellow { background: #fff3cd; border-color: #ffc107; }
-        .fouling-orange { background: #ffeaa7; border-color: #f39c12; }
-        .fouling-red { background: #f8d7da; border-color: #dc3545; }
-        
-        .fouling-chart { 
-            margin: 20px 0; 
-            background: white; 
-            padding: 15px; 
-            border-radius: 8px; 
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+
+        body { 
+            font-family: 'Inter', system-ui, -apple-system, sans-serif; 
+            background: var(--bg-main); 
+            color: var(--text-main);
+            padding: 20px;
+            min-height: 100vh;
         }
-        
-        .fouling-link { 
-            display: inline-block; 
-            margin: 10px 0; 
-            padding: 8px 16px; 
-            background: #007bff; 
-            color: white; 
-            text-decoration: none; 
-            border-radius: 4px; 
-        }
-        .fouling-link:hover { background: #0056b3; }
-        
-        .calculator-section {
+
+        .page-header {
             text-align: center;
             margin-bottom: 30px;
-            padding: 20px;
+        }
+
+        .page-header h1 {
+            font-size: 2.5rem;
+            font-weight: 800;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.5rem;
+        }
+
+        .page-header p {
+            font-size: 1.1rem;
+            color: var(--text-muted);
+        }
+
+        .device-card { 
+            background: var(--bg-card); 
+            border-radius: 12px; 
+            border: 1px solid #334155;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2); 
+            margin-bottom: 20px; 
+            padding: 20px; 
+            transition: transform 0.2s; 
+        }
+        .device-card:hover { transform: translateY(-5px); border-color: var(--accent-primary); }
+        
+        .device-card h2 { 
+            margin-top: 0; 
+            color: var(--text-main);
+            border-bottom: 1px solid #334155;
+            padding-bottom: 10px;
+        }
+        
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-top: 10px; 
+            background: rgba(30, 41, 59, 0.5);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        th, td { 
+            padding: 12px 15px; 
+            text-align: left; 
+            border-bottom: 1px solid #334155;
+        }
+        
+        th { 
+            background: var(--accent-primary); 
+            color: white; 
+            text-transform: uppercase;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+        
+        tr:nth-child(even) { background: rgba(255,255,255,0.03); }
+        
+        .sensor-value { font-weight: bold; }
+        .T { color: #ef4444; }   /* Temperature */
+        .P { color: #3b82f6; }   /* Pressure */
+        .F { color: #10b981; }   /* Flow */
+        .G { color: #8b5cf6; }   /* Generic */
+
+        /* Fouling Status Styles - Updated for dark theme */
+        .fouling-status {
+            margin: 15px 0;
+            padding: 20px;
             border-radius: 12px;
+            border-left: 5px solid;
+            background: rgba(30, 41, 59, 0.8);
+        }
+        .fouling-green { border-color: #10b981; background: rgba(16, 185, 129, 0.1); }
+        .fouling-blue { border-color: #3b82f6; background: rgba(59, 130, 246, 0.1); }
+        .fouling-yellow { border-color: #f59e0b; background: rgba(245, 158, 11, 0.1); }
+        .fouling-orange { border-color: #f97316; background: rgba(249, 115, 22, 0.1); }
+        .fouling-red { border-color: #ef4444; background: rgba(239, 68, 68, 0.1); }
+
+        .fouling-chart {
+            margin: 20px 0;
+            background: var(--bg-card);
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #334155;
+        }
+
+        .fouling-link {
+            display: inline-block;
+            margin: 10px 5px;
+            padding: 10px 20px;
+            background: var(--accent-primary);
             color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 500;
+            transition: all 0.3s;
         }
-        
+        .fouling-link:hover { 
+            background: #2563eb; 
+            color: white;
+            transform: translateY(-1px);
+        }
+
+        .calculator-section {            
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 16px;
+            color: white;
+            border: 1px solid #6366f1;
+        }
+
         .calculator-buttons {
-            margin-top: 15px;
+            margin-top: 20px;
         }
-        
+
         .btn-calculator {
             background: rgba(255,255,255,0.2);
             border: 2px solid white;
             color: white;
-            padding: 10px 20px;
+            padding: 12px 25px;
             margin: 0 10px;
             border-radius: 25px;
             text-decoration: none;
             transition: all 0.3s;
+            font-weight: 500;
         }
-        
+
         .btn-calculator:hover {
             background: white;
             color: #667eea;
+            transform: translateY(-2px);
+        }
+
+        /* Loading states */
+        .loading {
+            opacity: 0.7;
+            pointer-events: none;
+        }
+
+        .fa-spin {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Responsive improvements */
+        @media (max-width: 768px) {
+            .calculator-buttons {
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .btn-calculator {
+                margin: 5px 0;
+            }
+            
+            .fouling-status > div {
+                grid-template-columns: 1fr !important;
+            }
         }
     </style>
 </head>
 <body>
-    <h1>Customer Dashboard</h1>
-    
+    <div class="page-header">
+        <h1>Factory Monitoring Dashboard</h1>
+        <p class="text-muted">Real-time sensor data and heat exchanger analytics</p>
+    </div>
+
     <!-- Fouling Calculator Section -->
     <div class="calculator-section">
-        <h3>🧮 Heat Exchanger Fouling Analysis</h3>
+        <h3><i class="fas fa-calculator me-2"></i>Heat Exchanger Fouling Analysis</h3>
         <p>Monitor and analyze heat exchanger performance with real-time fouling factor calculations</p>
         <div class="calculator-buttons">
             <a href="{% url 'fouling_calculator' %}" class="btn-calculator">
-                Open Fouling Calculator
+                <i class="fas fa-calculator me-1"></i>Open Fouling Calculator
             </a>
             <a href="#" onclick="showFoulingInfo()" class="btn-calculator">
-                What is Fouling Factor?
+                <i class="fas fa-info-circle me-1"></i>What is Fouling Factor?
             </a>
         </div>
     </div>
-    
-    <div id="dashboard"></div>
+
+    <div id="dashboard">
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary mb-3"></div>
+            <p class="text-muted">Loading dashboard data...</p>
+        </div>
+    </div>
 
     <script>
     const dashboardUUID = "{{ dashboard_uuid }}";
     const apiURL = `/api/dashboard/${dashboardUUID}/data/`;
 
-    // Map severity → CSS class (kept same as before)
+    // Add loading states to all links
+    document.addEventListener('DOMContentLoaded', function() {
+        const links = document.querySelectorAll('a');
+        links.forEach(link => {
+            link.addEventListener('click', function(e) {
+                if (this.href && !this.href.startsWith('javascript:')) {
+                    const originalHtml = this.innerHTML;
+                    this.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Loading...';
+                    this.classList.add('loading');
+                    
+                    // Revert after 3 seconds if still on page
+                    setTimeout(() => {
+                        this.innerHTML = originalHtml;
+                        this.classList.remove('loading');
+                    }, 3000);
+                }
+            });
+        });
+    });
+
+    // Map severity → CSS class (updated for dark theme)
     function getFoulingStatusClass(severity) {
         const statusMap = {
             'No Fouling': 'fouling-green',
@@ -133,26 +278,26 @@
 
         return `
             <div class="fouling-status ${statusClass}">
-                <h4>🔍 ${deviceName} - Fouling Analysis</h4>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <h4><i class="fas fa-search me-2"></i>${deviceName} - Fouling Analysis</h4>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                     <div>
-                        <p><strong>Status:</strong> ${severity}</p>
-                        <p><strong>Fouling Factor:</strong> ${ff ? ff.toExponential(4) : 'N/A'} m²·K/W</p>
-                        <p><strong>Performance Ratio:</strong> ${perf ? (perf * 100).toFixed(1) : 'N/A'}%</p>
+                        <p><strong class="text-light">Status:</strong> <span class="text-white">${severity}</span></p>
+                        <p><strong class="text-light">Fouling Factor:</strong> <span class="text-white">${ff ? ff.toExponential(4) : 'N/A'} m²·K/W</span></p>
+                        <p><strong class="text-light">Performance Ratio:</strong> <span class="text-white">${perf ? (perf * 100).toFixed(1) : 'N/A'}%</span></p>
                     </div>
                     <div>
-                        <p><strong>Actual U:</strong> ${uActual ? uActual.toFixed(0) : 'N/A'} W/m²·K</p>
-                        <p><strong>Clean U:</strong> ${uClean ? uClean.toFixed(0) : 'N/A'} W/m²·K</p>
-                        <p><strong>Heat Duty:</strong> ${heatDuty ? (heatDuty / 1000).toFixed(1) : 'N/A'} kW</p>
+                        <p><strong class="text-light">Actual U:</strong> <span class="text-white">${uActual ? uActual.toFixed(0) : 'N/A'} W/m²·K</span></p>
+                        <p><strong class="text-light">Clean U:</strong> <span class="text-white">${uClean ? uClean.toFixed(0) : 'N/A'} W/m²·K</span></p>
+                        <p><strong class="text-light">Heat Duty:</strong> <span class="text-white">${heatDuty ? (heatDuty / 1000).toFixed(1) : 'N/A'} kW</span></p>
                     </div>
                 </div>
-                <p><strong>Recommendation:</strong> ${recommendation}</p>
+                <p><strong class="text-light">Recommendation:</strong> <span class="text-white">${recommendation}</span></p>
                 <div style="text-align: center;">
                     <a href="/api/ui/device/${deviceId}/fouling/" class="fouling-link">
-                        View Detailed Analysis
+                        <i class="fas fa-chart-line me-1"></i>View Detailed Analysis
                     </a>
-                    <a href="{% url 'fouling_calculator' %}?device=${deviceId}" class="fouling-link" style="margin-left: 10px;">
-                        Calculate Fouling
+                    <a href="{% url 'fouling_calculator' %}?device=${deviceId}" class="fouling-link">
+                        <i class="fas fa-calculator me-1"></i>Calculate Fouling
                     </a>
                 </div>
             </div>
@@ -165,9 +310,10 @@
 
         const ctx = canvas.getContext('2d');
         const labels = points.map(p => {
-            // p.timestamp is already IST string from backend
             try {
-                return new Date(p.timestamp).toLocaleString();
+                return new Date(p.timestamp).toLocaleString('en-IN', {
+                    timeZone: 'Asia/Kolkata'
+                });
             } catch (e) {
                 return p.timestamp;
             }
@@ -183,14 +329,21 @@
                     label: 'Fouling Factor (m²·K/W)',
                     data: values,
                     borderWidth: 2,
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
                     tension: 0.4,
                     fill: true
                 }]
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
                 plugins: {
-                    legend: { display: true, position: 'top' },
+                    legend: { 
+                        display: true, 
+                        position: 'top',
+                        labels: { color: '#94a3b8' }
+                    },
                     tooltip: {
                         callbacks: {
                             label: function (context) {
@@ -205,14 +358,20 @@
                         beginAtZero: true,
                         title: {
                             display: true,
-                            text: 'Fouling Factor (m²·K/W)'
-                        }
+                            text: 'Fouling Factor (m²·K/W)',
+                            color: '#94a3b8'
+                        },
+                        grid: { color: 'rgba(255,255,255,0.1)' },
+                        ticks: { color: '#94a3b8' }
                     },
                     x: {
                         title: {
                             display: true,
-                            text: 'Time'
-                        }
+                            text: 'Time (IST)',
+                            color: '#94a3b8'
+                        },
+                        grid: { color: 'rgba(255,255,255,0.1)' },
+                        ticks: { color: '#94a3b8' }
                     }
                 }
             }
@@ -225,7 +384,6 @@
         
 📊 What is Fouling Factor?
 Fouling factor measures thermal resistance caused by deposits on heat transfer surfaces.
-
 🔍 Why it matters:
 • Higher fouling = Reduced heat transfer efficiency
 • Increased energy consumption
@@ -246,7 +404,7 @@ Use the calculator to analyze your heat exchanger performance!`);
         const canvas = document.getElementById(`fouling-chart-${deviceId}`);
         if (!statusDiv || !canvas) return;
 
-        statusDiv.innerHTML = '<p class="text-muted">Loading fouling data…</p>';
+        statusDiv.innerHTML = '<p class="text-muted"><i class="fas fa-spinner fa-spin me-1"></i>Loading fouling data…</p>';
 
         try {
             const response = await axios.get(`/api/devices/${deviceId}/fouling-history/?points=12`);
@@ -263,7 +421,7 @@ Use the calculator to analyze your heat exchanger performance!`);
             initializeFoulingChart(canvas, points, deviceName);
         } catch (err) {
             console.error('Error loading fouling history for device', deviceId, err);
-            statusDiv.innerHTML = '<p style="color:red;">Failed to load fouling data.</p>';
+            statusDiv.innerHTML = '<p class="text-danger"><i class="fas fa-exclamation-triangle me-1"></i>Failed to load fouling data.</p>';
         }
     }
 
@@ -276,7 +434,7 @@ Use the calculator to analyze your heat exchanger performance!`);
             container.innerHTML = '';
 
             if (!data.devices || data.devices.length === 0) {
-                container.innerHTML = '<p style="text-align:center;">No devices found for this customer.</p>';
+                container.innerHTML = '<div class="card bg-dark text-center py-5"><p class="text-muted">No devices found for this customer.</p></div>';
                 return;
             }
 
@@ -286,35 +444,39 @@ Use the calculator to analyze your heat exchanger performance!`);
 
                 // Header + fouling containers
                 card.innerHTML = `
-                    <h2>${device.device_name} (ID: ${device.device_id})</h2>
+                    <h2><i class="fas fa-microchip me-2 text-primary"></i>${device.device_name} (ID: ${device.device_id})</h2>
                     <div id="fouling-status-${device.device_id}">
-                        <p class="text-muted">Loading fouling status...</p>
+                        <p class="text-muted"><i class="fas fa-spinner fa-spin me-1"></i>Loading fouling status...</p>
                     </div>
                     <div class="fouling-chart">
-                        <h4>📊 ${device.device_name} - Fouling Factor Trend</h4>
-                        <canvas id="fouling-chart-${device.device_id}" height="100"></canvas>
-                        <p style="text-align: center; margin-top: 10px; font-size: 12px; color: #666;">
-                            <a href="/api/ui/device/${device.device_id}/fouling/">View Detailed Fouling Analysis</a>
+                        <h4><i class="fas fa-chart-line me-2"></i>${device.device_name} - Fouling Factor Trend</h4>
+                        <canvas id="fouling-chart-${device.device_id}" height="120"></canvas>
+                        <p style="text-align: center; margin-top: 10px; font-size: 12px; color: #94a3b8;">
+                            <a href="/api/ui/device/${device.device_id}/fouling/"><i class="fas fa-external-link-alt me-1"></i>View Detailed Fouling Analysis</a>
                         </p>
                     </div>
                 `;
 
                 // --- Sensor data table (existing feature) ---
-                let tableHTML = '<h4>📈 Sensor Readings</h4><table><tr><th>Sensor</th><th>Value</th><th>Last Updated</th></tr>';
+                let tableHTML = '<h4><i class="fas fa-sensor me-2"></i>Sensor Readings</h4><table><tr><th>Sensor</th><th>Value</th><th>Last Updated (IST)</th></tr>';
 
-                // NOTE: adjust to your real API shape:
-                // expecting device.sensor_data[label] = [{timestamp, value}, ...]
                 const sensors = device.sensor_data || device.sensors || {};
                 for (let label in sensors) {
                     const readings = sensors[label];
                     if (!readings || !readings.length) continue;
                     const last = readings[readings.length - 1];
                     const className = ['T','P','F'].includes(label[0]) ? label[0] : 'G';
+                    
+                    // Format timestamp in IST
+                    const istTime = new Date(last.timestamp || last.created_at).toLocaleString('en-IN', {
+                        timeZone: 'Asia/Kolkata'
+                    });
+                    
                     tableHTML += `
                         <tr>
-                            <td>${label}</td>
+                            <td class="text-light">${label}</td>
                             <td class="sensor-value ${className}">${last.value}</td>
-                            <td>${new Date(last.timestamp || last.created_at).toLocaleString()}</td>
+                            <td class="text-muted">${istTime}</td>
                         </tr>`;
                 }
                 tableHTML += '</table>';
@@ -328,10 +490,11 @@ Use the calculator to analyze your heat exchanger performance!`);
         } catch (err) {
             console.error(err);
             document.getElementById('dashboard').innerHTML =
-                '<p style="color:red; text-align:center;">Failed to load dashboard. Check API endpoint.</p>';
+                '<div class="card bg-dark text-center py-5"><p class="text-danger"><i class="fas fa-exclamation-triangle me-1"></i>Failed to load dashboard. Check API endpoint.</p></div>';
         }
     }
 
+    // Initialize dashboard
     fetchDashboard();
     setInterval(fetchDashboard, 10000);
     </script>

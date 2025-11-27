@@ -29,6 +29,8 @@ import json
 import os
 import logging
 from django.conf import settings
+import pytz
+from django.utils import timezone
 try:
     from twilio.rest import Client
 except Exception:
@@ -1080,20 +1082,29 @@ def device_fouling_report_csv(request, device_id):
     # Date range filtering
     start_date = request.GET.get('start')
     end_date = request.GET.get('end')
-    
+
     fouling_data = FoulingData.objects.filter(device=device)
+    
+    # IST timezone for filtering
+    ist = pytz.timezone('Asia/Kolkata')
     
     if start_date:
         try:
             start_date = datetime.strptime(start_date, '%Y-%m-%d')
-            fouling_data = fouling_data.filter(calculated_at__date__gte=start_date)
+            # Convert to IST timezone for filtering
+            start_date = ist.localize(start_date)
+            fouling_data = fouling_data.filter(calculated_at__gte=start_date)
         except ValueError:
             pass
-            
+
     if end_date:
         try:
             end_date = datetime.strptime(end_date, '%Y-%m-%d')
-            fouling_data = fouling_data.filter(calculated_at__date__lte=end_date)
+            # Convert to IST timezone for filtering
+            end_date = ist.localize(end_date)
+            # Add one day to include the entire end date
+            end_date = end_date + timedelta(days=1)
+            fouling_data = fouling_data.filter(calculated_at__lt=end_date)
         except ValueError:
             pass
 
@@ -1106,15 +1117,18 @@ def device_fouling_report_csv(request, device_id):
     
     # Enhanced header with better organization
     writer.writerow([
-        'TIMESTAMP', 'DEVICE_NAME', 'LOCATION', 
-        'FOULING_FACTOR_M2K_W', 'U_ACTUAL_W_M2K', 'U_CLEAN_W_M2K', 
-        'PERFORMANCE_RATIO_PERCENT', 'HEAT_DUTY_W', 'LMTD_K', 
+        'TIMESTAMP (IST)', 'DEVICE_NAME', 'LOCATION',
+        'FOULING_FACTOR_M2K_W', 'U_ACTUAL_W_M2K', 'U_CLEAN_W_M2K',
+        'PERFORMANCE_RATIO_PERCENT', 'HEAT_DUTY_W', 'LMTD_K',
         'SEVERITY_LEVEL', 'RISK_LEVEL', 'MAINTENANCE_RECOMMENDATION'
     ])
 
     for data in fouling_data:
+        # Convert timestamp to IST
+        ist_timestamp = data.calculated_at.astimezone(ist).strftime("%Y-%m-%d %H:%M:%S")
+        
         writer.writerow([
-            data.calculated_at.strftime("%Y-%m-%d %H:%M:%S"),
+            ist_timestamp,  # Now in IST timezone
             device.name,
             device.location or 'N/A',
             f"{data.fouling_factor:.8f}",  # Higher precision for fouling factor
@@ -1129,10 +1143,10 @@ def device_fouling_report_csv(request, device_id):
         ])
 
     return response
-
 @api_view(["GET"])
 @authentication_classes([SessionAuthentication, TokenAuthentication])
 @permission_classes([IsAuthenticated])
+
 def device_sensor_report_csv(request, device_id):
     """Generate comprehensive sensor data CSV report with enhanced formatting"""
     try:
@@ -1143,20 +1157,28 @@ def device_sensor_report_csv(request, device_id):
     # Date range filtering
     start_date = request.GET.get('start')
     end_date = request.GET.get('end')
-    
+
     sensor_data = SensorData.objects.filter(device=device)
-    
+
     if start_date:
         try:
             start_date = datetime.strptime(start_date, '%Y-%m-%d')
-            sensor_data = sensor_data.filter(created_at__date__gte=start_date)
+            # Convert to IST timezone for filtering
+            ist = pytz.timezone('Asia/Kolkata')
+            start_date = ist.localize(start_date)
+            sensor_data = sensor_data.filter(created_at__gte=start_date)
         except ValueError:
             pass
-            
+
     if end_date:
         try:
             end_date = datetime.strptime(end_date, '%Y-%m-%d')
-            sensor_data = sensor_data.filter(created_at__date__lte=end_date)
+            # Convert to IST timezone for filtering
+            ist = pytz.timezone('Asia/Kolkata')
+            end_date = ist.localize(end_date)
+            # Add one day to include the entire end date
+            end_date = end_date + timedelta(days=1)
+            sensor_data = sensor_data.filter(created_at__lt=end_date)
         except ValueError:
             pass
 
@@ -1166,12 +1188,15 @@ def device_sensor_report_csv(request, device_id):
     response['Content-Disposition'] = f'attachment; filename="sensor_report_{device.name}_{timezone.now().strftime("%Y%m%d_%H%M%S")}.csv"'
 
     writer = csv.writer(response)
-    
+
     # Write header with enhanced information
     writer.writerow([
-        'TIMESTAMP', 'DEVICE_NAME', 'SENSOR_LABEL', 'SENSOR_TYPE', 
+        'TIMESTAMP (IST)', 'DEVICE_NAME', 'SENSOR_LABEL', 'SENSOR_TYPE',
         'VALUE', 'UNIT', 'EXPECTED_MIN', 'EXPECTED_MAX', 'STATUS', 'LOCATION'
     ])
+
+    # IST timezone
+    ist = pytz.timezone('Asia/Kolkata')
 
     for data in sensor_data:
         # Determine status based on expected ranges
@@ -1182,12 +1207,15 @@ def device_sensor_report_csv(request, device_id):
         elif config.expected_max is not None and data.value > config.expected_max:
             status = 'ABOVE_MAXIMUM'
 
+        # Convert timestamp to IST
+        ist_timestamp = data.created_at.astimezone(ist).strftime("%Y-%m-%d %H:%M:%S")
+
         writer.writerow([
-            data.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+            ist_timestamp,  # Now in IST timezone
             device.name,
             config.sensor_label,
             config.sensor_type.name,
-            f"{data.value:.6f}",  # More precise formatting
+            f"{data.value:.6f}",
             config.sensor_type.unit,
             config.expected_min or 'N/A',
             config.expected_max or 'N/A',
