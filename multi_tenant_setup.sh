@@ -187,6 +187,11 @@ docker compose \
 # Wait for database to be ready
 echo "⏳ Waiting for database to be ready..."
 sleep 10
+# ---------------------------------------------------------------
+# Step 6.5: Install required Python packages
+# ---------------------------------------------------------------
+echo "📦 Installing required Python packages..."
+docker compose --env-file "${ENV_PATH_TENANT}" -p "${PROJECT_NAME}" exec -T web pip install pytz
 
 # ---------------------------------------------------------------
 # Step 7: Apply migrations & collect static files (WITH ERROR HANDLING)
