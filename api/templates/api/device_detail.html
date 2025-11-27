@@ -9,6 +9,52 @@
     <p class="text-muted">Advanced sensor analytics and real-time monitoring</p>
 </div>
 
+<!-- Date Range Filter -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="card-title">Data Range Filter</h6>
+                <form method="get" class="row g-3 align-items-end">
+                    <div class="col-md-3">
+                        <label class="form-label">From Date</label>
+                        <input type="datetime-local" class="form-control" name="start_date" 
+                               value="{{ request.GET.start_date }}">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">To Date</label>
+                        <input type="datetime-local" class="form-control" name="end_date" 
+                               value="{{ request.GET.end_date }}">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Data Points</label>
+                        <select class="form-select" name="limit">
+                            <option value="50" {% if request.GET.limit == "50" %}selected{% endif %}>Last 50 readings</option>
+                            <option value="100" {% if request.GET.limit == "100" %}selected{% endif %}>Last 100 readings</option>
+                            <option value="200" {% if request.GET.limit == "200" %}selected{% endif %}>Last 200 readings</option>
+                            <option value="0" {% if request.GET.limit == "0" %}selected{% endif %}>All data</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <button type="submit" class="btn btn-primary w-100">Apply Filter</button>
+                    </div>
+                </form>
+                {% if request.GET.start_date or request.GET.end_date %}
+                <div class="mt-2">
+                    <small class="text-muted">
+                        Filtered: 
+                        {% if request.GET.start_date %}From {{ request.GET.start_date }}{% endif %}
+                        {% if request.GET.end_date %} to {{ request.GET.end_date }}{% endif %}
+                        {% if request.GET.limit and request.GET.limit != "0" %} | Limit: {{ request.GET.limit }} readings{% endif %}
+                    </small>
+                    <a href="?" class="btn btn-sm btn-outline-secondary ms-2">Clear Filters</a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="row g-4">
     <!-- Device Information Sidebar -->
     <div class="col-12 col-lg-4">
@@ -50,6 +96,7 @@
 
                 <hr class="my-3">
 
+                <!-- Updated CSV Export with Date Range -->
                 <div class="d-grid gap-2">
                     <a href="{% url 'customer_dashboard' %}" class="btn btn-outline-primary">
                         <i class="fas fa-arrow-left me-1"></i>Back to Dashboard
@@ -57,12 +104,24 @@
                     <a href="{% url 'fouling_monitoring' device.id %}" class="btn btn-warning">
                         <i class="fas fa-fire me-1"></i>Fouling Analysis
                     </a>
-                    <div class="btn-group" role="group">
-                        <a href="{% url 'device_sensor_report_csv' device.id %}" class="btn btn-outline-success btn-sm">
-                            <i class="fas fa-file-csv me-1"></i>Sensor CSV
+                    
+                    <div class="btn-group-vertical" role="group">
+                        <!-- Sensor CSV with current filters -->
+                        <a href="{% url 'device_sensor_report_csv' device.id %}?{% for key, value in request.GET.items %}{% if key != 'limit' %}{{ key }}={{ value }}&{% endif %}{% endfor %}" 
+                           class="btn btn-outline-success btn-sm">
+                            <i class="fas fa-file-csv me-1"></i>Export Sensor CSV
+                            {% if request.GET.start_date or request.GET.end_date %}
+                            <br><small>(With Current Filters)</small>
+                            {% endif %}
                         </a>
-                        <a href="{% url 'device_fouling_report_csv' device.id %}" class="btn btn-outline-info btn-sm">
-                            <i class="fas fa-file-csv me-1"></i>Fouling CSV
+                        
+                        <!-- Fouling CSV with current filters -->
+                        <a href="{% url 'device_fouling_report_csv' device.id %}?{% for key, value in request.GET.items %}{% if key != 'limit' %}{{ key }}={{ value }}&{% endif %}{% endfor %}" 
+                           class="btn btn-outline-info btn-sm">
+                            <i class="fas fa-file-csv me-1"></i>Export Fouling CSV
+                            {% if request.GET.start_date or request.GET.end_date %}
+                            <br><small>(With Current Filters)</small>
+                            {% endif %}
                         </a>
                     </div>
                 </div>
@@ -73,12 +132,15 @@
     <!-- Sensor Charts Grid -->
     <div class="col-12 col-lg-8">
         <div class="row g-4" id="charts-container">
-            <!-- Charts will be created here by JavaScript -->
+            <!-- Loading placeholder -->
             <div class="col-12">
                 <div class="card">
                     <div class="card-body text-center py-5">
                         <div class="spinner-border text-primary mb-3"></div>
                         <p class="text-muted mb-0">Loading sensor data and charts...</p>
+                        {% if request.GET.start_date or request.GET.end_date %}
+                        <small class="text-muted">With applied filters</small>
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -90,12 +152,12 @@
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('DOM loaded, checking sensor data...');
+    console.log('Loading sensor data with filters...');
     
     const sensorData = {{ sensor_data_json|safe }};
     const container = document.getElementById('charts-container');
     
-    console.log('Sensor data:', sensorData);
+    console.log('Sensor data loaded:', Object.keys(sensorData).length, 'sensors');
     
     if (!sensorData || Object.keys(sensorData).length === 0) {
         container.innerHTML = `
@@ -105,7 +167,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
                         <h5 class="text-muted">No Sensor Data Available</h5>
                         <p class="text-muted mb-0">
-                            Sensor data will appear here once the device starts sending measurements.
+                            No data found for the selected filters.
+                            {% if request.GET.start_date or request.GET.end_date %}
+                            <br>Try adjusting your date range or clear filters.
+                            {% endif %}
                         </p>
                     </div>
                 </div>
@@ -116,8 +181,11 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Create chart containers
     container.innerHTML = '';
+    const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
+    
     Object.keys(sensorData).forEach((sensorLabel, index) => {
         const readings = sensorData[sensorLabel];
+        const color = colors[index % colors.length];
         
         const colDiv = document.createElement('div');
         colDiv.className = 'col-12 col-md-6 mb-4';
@@ -125,20 +193,24 @@ document.addEventListener('DOMContentLoaded', function() {
             <div class="card h-100">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h6 class="mb-0">${sensorLabel.toUpperCase()}</h6>
-                    <span class="badge bg-primary">${sensorLabel}</span>
+                    <span class="badge" style="background-color: ${color}">${sensorLabel}</span>
                 </div>
                 <div class="card-body">
                     <div style="height: 200px;">
                         <canvas id="chart-${sensorLabel}"></canvas>
                     </div>
                     <div class="row mt-3 text-center">
-                        <div class="col-6">
+                        <div class="col-4">
                             <div class="h5">${readings[0]?.value || 'N/A'}</div>
                             <small class="text-muted">Current</small>
                         </div>
-                        <div class="col-6">
+                        <div class="col-4">
                             <div class="h5 text-muted">${readings.length}</div>
                             <small class="text-muted">Readings</small>
+                        </div>
+                        <div class="col-4">
+                            <div class="h5 text-muted">${readings[readings.length-1]?.timestamp ? new Date(readings[readings.length-1].timestamp).toLocaleDateString() : 'N/A'}</div>
+                            <small class="text-muted">Last Update</small>
                         </div>
                     </div>
                 </div>
@@ -152,13 +224,9 @@ document.addEventListener('DOMContentLoaded', function() {
         Object.keys(sensorData).forEach((sensorLabel, index) => {
             const readings = sensorData[sensorLabel];
             const canvas = document.getElementById(`chart-${sensorLabel}`);
+            const color = colors[index % colors.length];
             
-            if (!canvas || !readings || readings.length === 0) {
-                console.log('No canvas or readings for:', sensorLabel);
-                return;
-            }
-            
-            console.log('Creating chart for:', sensorLabel);
+            if (!canvas || !readings || readings.length === 0) return;
             
             const labels = readings.map(r => {
                 const date = new Date(r.timestamp);
@@ -179,27 +247,47 @@ document.addEventListener('DOMContentLoaded', function() {
                         datasets: [{
                             label: sensorLabel,
                             data: values,
-                            borderColor: '#3b82f6',
-                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            borderColor: color,
+                            backgroundColor: color + '20',
                             borderWidth: 2,
                             tension: 0.4,
-                            fill: true
+                            fill: true,
+                            pointRadius: readings.length > 50 ? 0 : 2,
+                            pointHoverRadius: 5
                         }]
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        plugins: { legend: { display: false } },
+                        plugins: { 
+                            legend: { display: false },
+                            tooltip: {
+                                mode: 'index',
+                                intersect: false
+                            }
+                        },
                         scales: {
-                            x: { display: false },
+                            x: { 
+                                display: readings.length <= 20,
+                                grid: { display: false },
+                                ticks: {
+                                    maxTicksLimit: 10,
+                                    color: '#94a3b8'
+                                }
+                            },
                             y: { 
                                 display: true,
-                                grid: { color: 'rgba(255,255,255,0.1)' }
+                                grid: { color: 'rgba(148, 163, 184, 0.1)' },
+                                ticks: { color: '#94a3b8' }
                             }
+                        },
+                        interaction: {
+                            intersect: false,
+                            mode: 'index'
                         }
                     }
                 });
-                console.log('✅ Chart created for:', sensorLabel);
+                console.log(`✅ Chart created for ${sensorLabel} with ${readings.length} data points`);
             } catch (error) {
                 console.error('❌ Chart error for', sensorLabel, error);
             }
