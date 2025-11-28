@@ -7,22 +7,25 @@
     .stats-card {
         text-align: center;
         padding: 1.5rem;
+        color: var(--text-main) !important;
     }
     
     .stats-icon {
         font-size: 2.5rem;
         margin-bottom: 1rem;
         opacity: 0.9;
+        color: var(--text-main) !important;
     }
     
     .stats-value {
         font-size: 2rem;
         font-weight: 800;
         margin-bottom: 0.5rem;
+        color: var(--text-main) !important;
     }
     
     .stats-label {
-        color: var(--text-muted);
+        color: var(--text-muted) !important;
         font-size: 0.9rem;
         text-transform: uppercase;
         letter-spacing: 0.05em;
@@ -75,6 +78,11 @@
         background: rgba(30, 41, 59, 0.8);
         border: 1px solid var(--border-subtle);
     }
+
+    .kpi-card {
+        background: linear-gradient(135deg, var(--bg-card) 0%, rgba(16, 185, 129, 0.1) 100%);
+        border-left: 4px solid var(--accent-success);
+    }
 </style>
 {% endblock %}
 
@@ -88,38 +96,69 @@
 <div class="row g-4 mb-5">
     <div class="col-6 col-md-3">
         <div class="card card-gradient-primary stats-card">
-            <div class="stats-icon text-primary">
+            <div class="stats-icon text-white">
                 <i class="fas fa-microchip"></i>
             </div>
-            <div class="stats-value">{{ devices|length }}</div>
-            <div class="stats-label">Active Devices</div>
+            <div class="stats-value text-white">{{ devices|length }}</div>
+            <div class="stats-label text-light">Active Devices</div>
         </div>
     </div>
     <div class="col-6 col-md-3">
         <div class="card card-gradient-success stats-card">
-            <div class="stats-icon text-success">
+            <div class="stats-icon text-white">
                 <i class="fas fa-sensor"></i>
             </div>
-            <div class="stats-value">{{ total_sensors }}</div>
-            <div class="stats-label">Total Sensors</div>
+            <div class="stats-value text-white">{{ total_sensors }}</div>
+            <div class="stats-label text-light">Total Sensors</div>
         </div>
     </div>
     <div class="col-6 col-md-3">
         <div class="card card-gradient-warning stats-card">
-            <div class="stats-icon text-warning">
+            <div class="stats-icon text-white">
                 <i class="fas fa-fire"></i>
             </div>
-            <div class="stats-value">{{ critical_alerts }}</div>
-            <div class="stats-label">Critical Alerts</div>
+            <div class="stats-value text-white">{{ critical_alerts }}</div>
+            <div class="stats-label text-light">Critical Alerts</div>
         </div>
     </div>
     <div class="col-6 col-md-3">
         <div class="card card-gradient-primary stats-card">
-            <div class="stats-icon text-info">
+            <div class="stats-icon text-white">
                 <i class="fas fa-chart-line"></i>
             </div>
-            <div class="stats-value">{{ performance_avg }}%</div>
-            <div class="stats-label">Avg Performance</div>
+            <div class="stats-value text-white">{{ performance_avg }}%</div>
+            <div class="stats-label text-light">Avg Performance</div>
+        </div>
+    </div>
+</div>
+
+<!-- New KPI Indicators -->
+<div class="row g-4 mb-4">
+    <div class="col-12">
+        <div class="card kpi-card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-chart-bar me-2"></i>Key Performance Indicators</h5>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-md-3">
+                        <h6 class="text-muted">Overall Heat Exchange Coefficient</h6>
+                        <h4 class="text-success" id="overallUValue">-- W/m²·K</h4>
+                    </div>
+                    <div class="col-md-3">
+                        <h6 class="text-muted">Thermal Effectiveness</h6>
+                        <h4 class="text-info" id="thermalEffectiveness">--%</h4>
+                    </div>
+                    <div class="col-md-3">
+                        <h6 class="text-muted">Energy Savings</h6>
+                        <h4 class="text-warning" id="energySavings">-- kWh</h4>
+                    </div>
+                    <div class="col-md-3">
+                        <h6 class="text-muted">Predicted Fouling Factor</h6>
+                        <h4 class="text-danger" id="predictedFouling">-- m²·K/W</h4>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -161,7 +200,7 @@
                 <!-- Dashboard Sharing -->
                 {% if dashboard_uuid %}
                 <div class="mb-3">
-                    <label class="form-label small text-muted mb-2">Shareable Dashboard</label>
+                    <label class="form-label small text-light mb-2">Shareable Dashboard</label>
                     <div class="input-group input-group-sm">
                         <input type="text" class="form-control" value="{{ request.scheme }}://{{ request.get_host }}/api/ui/dashboard/{{ dashboard_uuid }}/" 
                                id="dashboardUrl" readonly>
@@ -191,7 +230,7 @@
                                 <div class="d-flex align-items-center">
                                     <span class="status-indicator {% if device.is_active %}status-active{% else %}status-inactive{% endif %}"></span>
                                     <div>
-                                        <h6 class="mb-0">{{ device.name }}</h6>
+                                        <h6 class="mb-0 text-white">{{ device.name }}</h6>
                                         <small class="text-muted">ID: {{ device.id }}</small>
                                     </div>
                                 </div>
@@ -210,13 +249,13 @@
                                 <!-- Device Info -->
                                 <div class="mb-3">
                                     {% if device.location %}
-                                        <p class="small mb-2">
+                                        <p class="small mb-2 text-light">
                                             <i class="fas fa-map-marker-alt me-2 text-muted"></i>
                                             {{ device.location }}
                                         </p>
                                     {% endif %}
                                     {% if device.device_type %}
-                                        <p class="small mb-2">
+                                        <p class="small mb-2 text-light">
                                             <i class="fas fa-cog me-2 text-muted"></i>
                                             {{ device.device_type.name }}
                                         </p>
@@ -228,10 +267,10 @@
                                     <small class="text-muted d-block mb-2">Active Sensors:</small>
                                     <div class="d-flex flex-wrap gap-1">
                                         {% for config in device.sensor_configs.all|slice:":4" %}
-                                            <span class="sensor-badge">{{ config.sensor_label }}</span>
+                                            <span class="sensor-badge text-light">{{ config.sensor_label }}</span>
                                         {% endfor %}
                                         {% if device.sensor_configs.count > 4 %}
-                                            <span class="sensor-badge">+{{ device.sensor_configs.count|add:"-4" }} more</span>
+                                            <span class="sensor-badge text-light">+{{ device.sensor_configs.count|add:"-4" }} more</span>
                                         {% endif %}
                                     </div>
                                 </div>
@@ -283,7 +322,7 @@
     <div class="modal-dialog modal-lg">
         <div class="modal-content bg-dark border border-secondary">
             <div class="modal-header">
-                <h5 class="modal-title"><i class="fas fa-file-export me-2"></i>Generate Reports</h5>
+                <h5 class="modal-title text-white"><i class="fas fa-file-export me-2"></i>Generate Reports</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
@@ -292,7 +331,7 @@
                     <div class="col-12 col-md-6">
                         <div class="card bg-secondary border-secondary">
                             <div class="card-body">
-                                <h6 class="card-title">{{ device.name }}</h6>
+                                <h6 class="card-title text-white">{{ device.name }}</h6>
                                 <div class="btn-group w-100" role="group">
                                     <a href="{% url 'device_fouling_report_csv' device.id %}" 
                                        class="btn btn-outline-primary btn-sm">
@@ -335,8 +374,21 @@ function showReportsModal() {
     modal.show();
 }
 
+// Load KPI data
+function loadKPIData() {
+    // This would typically fetch from your API
+    // For now, we'll set some sample values
+    document.getElementById('overallUValue').textContent = '850 W/m²·K';
+    document.getElementById('thermalEffectiveness').textContent = '92.5%';
+    document.getElementById('energySavings').textContent = '1,250 kWh';
+    document.getElementById('predictedFouling').textContent = '0.00015 m²·K/W';
+}
+
 // Add view transitions for better UX
 document.addEventListener('DOMContentLoaded', function() {
+    // Load KPI data
+    loadKPIData();
+    
     // Add loading states to buttons
     document.querySelectorAll('a.btn').forEach(btn => {
         btn.addEventListener('click', function(e) {

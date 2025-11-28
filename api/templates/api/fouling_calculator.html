@@ -1,49 +1,93 @@
 {% extends "base.html" %}
 
-{% block title %}Fouling Factor Calculator - IoT Platform{% endblock %}
+{% block title %}Fouling Factor Calculator - ZEROLOSS SYSTEMS IoT Platform{% endblock %}
+
+{% block extra_head %}
+<style>
+    .form-label {
+        color: var(--text-main) !important;
+        font-weight: 500;
+    }
+
+    .card-header h5 {
+        color: var(--text-main) !important;
+    }
+
+    .alert {
+        color: var(--text-main) !important;
+    }
+
+    .calculation-section {
+        border-left: 4px solid var(--accent-primary);
+        padding-left: 1rem;
+        margin: 1rem 0;
+    }
+    
+    .live-data-badge {
+        background: var(--accent-success);
+        color: white;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.75rem;
+        margin-left: 0.5rem;
+    }
+</style>
+{% endblock %}
 
 {% block content %}
 <div class="row">
-    <div class="col-md-8 offset-md-2">
-        <h2>🧮 Heat Exchanger Fouling Factor Calculator</h2>
-        <p class="text-muted">Calculate fouling factor based on heat exchanger operating parameters</p>
+    <div class="col-md-10 offset-md-1">
+        <div class="page-header">
+            <h1>🧮 Heat Exchanger Fouling Factor Calculator</h1>
+            <p class="text-muted">Calculate fouling factor using LMTD method - ZEROLOSS SYSTEMS</p>
+        </div>
         
         <div class="card">
             <div class="card-header">
-                <h5>Calculator Parameters</h5>
+                <h5 class="mb-0"><i class="fas fa-calculator me-2"></i>Calculator Parameters (LMTD Method)</h5>
             </div>
             <div class="card-body">
                 <form id="foulingForm">
                     <div class="row">
                         <div class="col-md-6">
-                            <h6>Hot Fluid Parameters</h6>
-                            <div class="mb-3">
-                                <label class="form-label">Flow Rate (kg/s)</label>
-                                <input type="number" class="form-control" id="hot_flow_rate" step="0.01" value="10" required>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Inlet Temperature (°C)</label>
-                                <input type="number" class="form-control" id="hot_inlet_temp" step="0.1" value="85" required>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Outlet Temperature (°C)</label>
-                                <input type="number" class="form-control" id="hot_outlet_temp" step="0.1" value="45" required>
+                            <div class="calculation-section">
+                                <h6 class="text-primary">🔥 Hot Fluid Parameters</h6>
+                                <div class="mb-3">
+                                    <label class="form-label">Flow Rate (kg/s)</label>
+                                    <input type="number" class="form-control" id="hot_flow_rate" step="0.01" value="10" required>
+                                    <small class="text-muted">Mass flow rate of hot fluid</small>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Inlet Temperature T1_in (°C)</label>
+                                    <input type="number" class="form-control" id="hot_inlet_temp" step="0.1" value="85" required>
+                                    <small class="text-muted">Hot side inlet temperature</small>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Outlet Temperature T1_out (°C)</label>
+                                    <input type="number" class="form-control" id="hot_outlet_temp" step="0.1" value="45" required>
+                                    <small class="text-muted">Hot side outlet temperature</small>
+                                </div>
                             </div>
                         </div>
                         
                         <div class="col-md-6">
-                            <h6>Cold Fluid Parameters</h6>
-                            <div class="mb-3">
-                                <label class="form-label">Flow Rate (kg/s)</label>
-                                <input type="number" class="form-control" id="cold_flow_rate" step="0.01" value="12" required>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Inlet Temperature (°C)</label>
-                                <input type="number" class="form-control" id="cold_inlet_temp" step="0.1" value="25" required>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Outlet Temperature (°C)</label>
-                                <input type="number" class="form-control" id="cold_outlet_temp" step="0.1" value="40" required>
+                            <div class="calculation-section">
+                                <h6 class="text-info">❄️ Cold Fluid Parameters</h6>
+                                <div class="mb-3">
+                                    <label class="form-label">Flow Rate (kg/s)</label>
+                                    <input type="number" class="form-control" id="cold_flow_rate" step="0.01" value="12" required>
+                                    <small class="text-muted">Mass flow rate of cold fluid</small>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Inlet Temperature T2_in (°C)</label>
+                                    <input type="number" class="form-control" id="cold_inlet_temp" step="0.1" value="25" required>
+                                    <small class="text-muted">Cold side inlet temperature</small>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Outlet Temperature T2_out (°C)</label>
+                                    <input type="number" class="form-control" id="cold_outlet_temp" step="0.1" value="40" required>
+                                    <small class="text-muted">Cold side outlet temperature</small>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -53,24 +97,63 @@
                             <div class="mb-3">
                                 <label class="form-label">Heat Transfer Area (m²)</label>
                                 <input type="number" class="form-control" id="heat_transfer_area" step="0.1" value="15.5" required>
+                                <small class="text-muted">Total heat transfer surface area</small>
                             </div>
                         </div>
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label class="form-label">Clean U Value (W/m²·K)</label>
-                                <input type="number" class="form-control" id="u_clean" step="1" value="800" required>
+                                <div class="input-group">
+                                    <input type="number" class="form-control" id="u_clean" step="1" value="800" required>
+                                    <button type="button" class="btn btn-outline-secondary" onclick="calculateCleanU()">
+                                        Calculate
+                                    </button>
+                                </div>
+                                <small class="text-muted">Clean overall heat transfer coefficient</small>
                             </div>
                         </div>
                     </div>
                     
-                    <button type="submit" class="btn btn-primary">Calculate Fouling Factor</button>
-                    <button type="button" id="calculateU" class="btn btn-outline-secondary">Calculate Clean U</button>
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <button type="button" id="calculateU" class="btn btn-outline-primary me-md-2">
+                            <i class="fas fa-calculator me-1"></i>Calculate Clean U
+                        </button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-bolt me-1"></i>Calculate Fouling Factor
+                        </button>
+                    </div>
                 </form>
             </div>
         </div>
         
         <div id="results" class="mt-4" style="display: none;">
             <!-- Results will be displayed here -->
+        </div>
+
+        <!-- Calculation Methodology -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-info-circle me-2"></i>Calculation Methodology</h5>
+            </div>
+            <div class="card-body">
+                <h6>LMTD (Log Mean Temperature Difference) Method:</h6>
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Heat Duty Calculation:</strong></p>
+                        <p>Q = m_hot × Cp × (T1_in - T1_out)</p>
+                        <p>Q = m_cold × Cp × (T2_out - T2_in)</p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>LMTD Calculation:</strong></p>
+                        <p>ΔT1 = T1_in - T2_out</p>
+                        <p>ΔT2 = T1_out - T2_in</p>
+                        <p>LMTD = (ΔT1 - ΔT2) / ln(ΔT1/ΔT2)</p>
+                    </div>
+                </div>
+                <p><strong>Fouling Factor:</strong></p>
+                <p>Rf = (1/U_actual - 1/U_clean)</p>
+                <p class="small text-muted mb-0">Where: Cp = 4186 J/kg·K (water), U_actual = Q / (A × LMTD)</p>
+            </div>
         </div>
     </div>
 </div>
@@ -85,102 +168,222 @@ document.getElementById('calculateU').addEventListener('click', function() {
     calculateCleanU();
 });
 
-function calculateFouling() {
-    const data = {
-        hot_flow_rate: parseFloat(document.getElementById('hot_flow_rate').value),
-        cold_flow_rate: parseFloat(document.getElementById('cold_flow_rate').value),
-        hot_inlet_temp: parseFloat(document.getElementById('hot_inlet_temp').value),
-        hot_outlet_temp: parseFloat(document.getElementById('hot_outlet_temp').value),
-        cold_inlet_temp: parseFloat(document.getElementById('cold_inlet_temp').value),
-        cold_outlet_temp: parseFloat(document.getElementById('cold_outlet_temp').value),
-        heat_transfer_area: parseFloat(document.getElementById('heat_transfer_area').value),
-        u_clean: parseFloat(document.getElementById('u_clean').value)
-    };
+// LMTD Calculation Function
+function calculateLMTD(T1_in, T1_out, T2_in, T2_out) {
+    const deltaT1 = T1_in - T2_out;
+    const deltaT2 = T1_out - T2_in;
+    
+    if (deltaT1 <= 0 || deltaT2 <= 0) {
+        return 0; // Invalid temperature difference
+    }
+    
+    if (Math.abs(deltaT1 - deltaT2) < 0.001) {
+        return deltaT1; // Use arithmetic mean if differences are equal
+    }
+    
+    return (deltaT1 - deltaT2) / Math.log(deltaT1 / deltaT2);
+}
 
-    fetch('/api/fouling/calculate/', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': '{{ csrf_token }}'
-        },
-        body: JSON.stringify(data)
-    })
-    .then(response => response.json())
-    .then(data => {
-        displayResults(data);
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        alert('Error calculating fouling factor');
+function calculateFouling() {
+    // Get all input values
+    const hot_flow_rate = parseFloat(document.getElementById('hot_flow_rate').value);
+    const cold_flow_rate = parseFloat(document.getElementById('cold_flow_rate').value);
+    const hot_inlet_temp = parseFloat(document.getElementById('hot_inlet_temp').value);
+    const hot_outlet_temp = parseFloat(document.getElementById('hot_outlet_temp').value);
+    const cold_inlet_temp = parseFloat(document.getElementById('cold_inlet_temp').value);
+    const cold_outlet_temp = parseFloat(document.getElementById('cold_outlet_temp').value);
+    const heat_transfer_area = parseFloat(document.getElementById('heat_transfer_area').value);
+    const u_clean = parseFloat(document.getElementById('u_clean').value);
+
+    // Validate inputs
+    if (Object.values({hot_flow_rate, cold_flow_rate, hot_inlet_temp, hot_outlet_temp, cold_inlet_temp, cold_outlet_temp, heat_transfer_area, u_clean}).some(val => isNaN(val))) {
+        alert('Please fill in all fields with valid numbers');
+        return;
+    }
+
+    // Calculate heat duty using LMTD method
+    const Cp = 4186; // Specific heat of water in J/kg·K
+    
+    // Heat duty from hot side
+    const heat_duty_hot = hot_flow_rate * Cp * (hot_inlet_temp - hot_outlet_temp);
+    
+    // Heat duty from cold side  
+    const heat_duty_cold = cold_flow_rate * Cp * (cold_outlet_temp - cold_inlet_temp);
+    
+    // Use average heat duty
+    const heat_duty = (heat_duty_hot + heat_duty_cold) / 2;
+    
+    // Calculate LMTD
+    const lmtd = calculateLMTD(hot_inlet_temp, hot_outlet_temp, cold_inlet_temp, cold_outlet_temp);
+    
+    if (lmtd <= 0) {
+        alert('Invalid temperature values. Please check that T1_in > T2_out and T1_out > T2_in.');
+        return;
+    }
+
+    // Calculate actual U value
+    const u_actual = heat_duty / (heat_transfer_area * lmtd);
+    
+    // Calculate fouling factor
+    const fouling_factor = Math.max(0, (1 / u_actual - 1 / u_clean));
+    
+    // Determine severity
+    let severity, color_code, recommendation, risk_level;
+    const performance_ratio = u_actual / u_clean;
+
+    if (fouling_factor < 0.0001) {
+        severity = "No Fouling";
+        color_code = "success";
+        recommendation = "Optimal performance. Continue regular monitoring.";
+        risk_level = "Low";
+    } else if (fouling_factor < 0.0005) {
+        severity = "Minor Fouling";
+        color_code = "info";
+        recommendation = "Minor deposits detected. Schedule routine inspection.";
+        risk_level = "Low";
+    } else if (fouling_factor < 0.001) {
+        severity = "Moderate Fouling";
+        color_code = "warning";
+        recommendation = "Moderate fouling detected. Plan cleaning within 2-4 weeks.";
+        risk_level = "Medium";
+    } else if (fouling_factor < 0.002) {
+        severity = "Severe Fouling";
+        color_code = "danger";
+        recommendation = "Severe fouling. Schedule immediate cleaning to prevent damage.";
+        risk_level = "High";
+    } else {
+        severity = "Critical Fouling";
+        color_code = "dark";
+        recommendation = "Critical condition. Immediate maintenance required to avoid equipment failure.";
+        risk_level = "Critical";
+    }
+
+    // Display results
+    displayResults({
+        fouling_factor: fouling_factor,
+        u_actual: u_actual,
+        u_clean: u_clean,
+        performance_ratio: performance_ratio,
+        heat_duty: heat_duty,
+        lmtd: lmtd,
+        severity: severity,
+        color_code: color_code,
+        recommendation: recommendation,
+        risk_level: risk_level,
+        calculated_at: new Date().toLocaleString('en-IN')
     });
 }
 
 function calculateCleanU() {
-    const data = {
-        hot_flow_rate: parseFloat(document.getElementById('hot_flow_rate').value),
-        cold_flow_rate: parseFloat(document.getElementById('cold_flow_rate').value),
-        hot_inlet_temp: parseFloat(document.getElementById('hot_inlet_temp').value),
-        hot_outlet_temp: parseFloat(document.getElementById('hot_outlet_temp').value),
-        cold_inlet_temp: parseFloat(document.getElementById('cold_inlet_temp').value),
-        cold_outlet_temp: parseFloat(document.getElementById('cold_outlet_temp').value),
-        heat_transfer_area: parseFloat(document.getElementById('heat_transfer_area').value)
-    };
+    const hot_flow_rate = parseFloat(document.getElementById('hot_flow_rate').value);
+    const cold_flow_rate = parseFloat(document.getElementById('cold_flow_rate').value);
+    const hot_inlet_temp = parseFloat(document.getElementById('hot_inlet_temp').value);
+    const hot_outlet_temp = parseFloat(document.getElementById('hot_outlet_temp').value);
+    const cold_inlet_temp = parseFloat(document.getElementById('cold_inlet_temp').value);
+    const cold_outlet_temp = parseFloat(document.getElementById('cold_outlet_temp').value);
+    const heat_transfer_area = parseFloat(document.getElementById('heat_transfer_area').value);
 
-    fetch('/api/fouling/calculate-clean-u/', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': '{{ csrf_token }}'
-        },
-        body: JSON.stringify(data)
-    })
-    .then(response => response.json())
-    .then(data => {
-        document.getElementById('u_clean').value = data.U_clean.toFixed(2);
-        alert(`Clean U Value: ${data.U_clean.toFixed(2)} W/m²·K`);
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        alert('Error calculating clean U value');
-    });
-}
+    // Validate inputs
+    if (Object.values({hot_flow_rate, cold_flow_rate, hot_inlet_temp, hot_outlet_temp, cold_inlet_temp, cold_outlet_temp, heat_transfer_area}).some(val => isNaN(val))) {
+        alert('Please fill in all fields with valid numbers');
+        return;
+    }
 
-function displayResults(data) {
-    const resultsDiv = document.getElementById('results');
-    const severityClass = `fouling-${data.color_code}`;
+    // Calculate clean U value assuming no fouling
+    const Cp = 4186; // Specific heat of water in J/kg·K
+    const heat_duty_hot = hot_flow_rate * Cp * (hot_inlet_temp - hot_outlet_temp);
+    const heat_duty_cold = cold_flow_rate * Cp * (cold_outlet_temp - cold_inlet_temp);
+    const heat_duty = (heat_duty_hot + heat_duty_cold) / 2;
     
+    const lmtd = calculateLMTD(hot_inlet_temp, hot_outlet_temp, cold_inlet_temp, cold_outlet_temp);
+    
+    if (lmtd <= 0) {
+        alert('Invalid temperature values for clean U calculation.');
+        return;
+    }
+
+    const u_clean = heat_duty / (heat_transfer_area * lmtd);
+    
+    document.getElementById('u_clean').value = u_clean.toFixed(2);
+    
+    // Show success message
+    const resultsDiv = document.getElementById('results');
     resultsDiv.innerHTML = `
-        <div class="card ${severityClass}">
-            <div class="card-header">
-                <h5>Calculation Results</h5>
-            </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-6">
-                        <h6>Fouling Analysis</h6>
-                        <p><strong>Fouling Factor:</strong> ${data.fouling_factor.toExponential(4)} m²·K/W</p>
-                        <p><strong>Fouling Resistance:</strong> ${data.fouling_resistance.toFixed(6)} cm²·K/W</p>
-                        <p><strong>Severity:</strong> <span class="badge bg-${data.color_code}">${data.severity}</span></p>
-                        <p><strong>Risk Level:</strong> ${data.risk_level}</p>
-                    </div>
-                    <div class="col-md-6">
-                        <h6>Performance Metrics</h6>
-                        <p><strong>Actual U:</strong> ${data.U_actual.toFixed(2)} W/m²·K</p>
-                        <p><strong>Clean U:</strong> ${data.U_clean.toFixed(2)} W/m²·K</p>
-                        <p><strong>Performance Ratio:</strong> ${(data.performance_ratio * 100).toFixed(1)}%</p>
-                        <p><strong>Heat Duty:</strong> ${(data.heat_duty / 1000).toFixed(2)} kW</p>
-                        <p><strong>LMTD:</strong> ${data.lmtd.toFixed(2)} K</p>
-                    </div>
-                </div>
-                <div class="mt-3">
-                    <h6>Recommendation</h6>
-                    <p class="alert alert-${data.color_code}">${data.recommendation}</p>
-                </div>
-                <p class="text-muted">Calculated at: ${data.calculated_at}</p>
-            </div>
+        <div class="alert alert-info">
+            <h6><i class="fas fa-check-circle me-2"></i>Clean U Value Calculated</h6>
+            <p><strong>Clean U Value:</strong> ${u_clean.toFixed(2)} W/m²·K</p>
+            <p class="small mb-0">This value represents the ideal heat transfer coefficient with no fouling.</p>
         </div>
     `;
     resultsDiv.style.display = 'block';
 }
+
+function displayResults(data) {
+    const resultsDiv = document.getElementById('results');
+    const severityClass = `alert-${data.color_code}`;
+    
+    resultsDiv.innerHTML = `
+        <div class="card">
+            <div class="card-header bg-${data.color_code}">
+                <h5 class="mb-0 text-white"><i class="fas fa-chart-bar me-2"></i>Calculation Results - LMTD Method</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="calculation-section">
+                            <h6 class="text-primary">Fouling Analysis</h6>
+                            <p><strong>Fouling Factor:</strong> <span class="badge bg-${data.color_code}">${data.fouling_factor.toExponential(4)} m²·K/W</span></p>
+                            <p><strong>Severity:</strong> <span class="badge bg-${data.color_code}">${data.severity}</span></p>
+                            <p><strong>Risk Level:</strong> ${data.risk_level}</p>
+                            <p><strong>Performance Ratio:</strong> ${(data.performance_ratio * 100).toFixed(1)}%</p>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="calculation-section">
+                            <h6 class="text-info">Performance Metrics</h6>
+                            <p><strong>Actual U Value:</strong> ${data.u_actual.toFixed(2)} W/m²·K</p>
+                            <p><strong>Clean U Value:</strong> ${data.u_clean.toFixed(2)} W/m²·K</p>
+                            <p><strong>Heat Duty:</strong> ${(data.heat_duty / 1000).toFixed(2)} kW</p>
+                            <p><strong>LMTD:</strong> ${data.lmtd.toFixed(2)} °C</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <h6>Recommendation</h6>
+                    <div class="alert ${severityClass}">
+                        <i class="fas fa-lightbulb me-2"></i>${data.recommendation}
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-md-6">
+                        <small class="text-muted"><strong>Calculation Method:</strong> LMTD (Log Mean Temperature Difference)</small>
+                    </div>
+                    <div class="col-md-6 text-end">
+                        <small class="text-muted">Calculated: ${data.calculated_at}</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    resultsDiv.style.display = 'block';
+    
+    // Scroll to results
+    resultsDiv.scrollIntoView({ behavior: 'smooth' });
+}
+
+// Add input validation
+document.addEventListener('DOMContentLoaded', function() {
+    // Validate temperature inputs
+    const tempInputs = ['hot_inlet_temp', 'hot_outlet_temp', 'cold_inlet_temp', 'cold_outlet_temp'];
+    tempInputs.forEach(id => {
+        document.getElementById(id).addEventListener('change', function() {
+            const value = parseFloat(this.value);
+            if (value < -50 || value > 500) {
+                alert('Temperature values should be between -50°C and 500°C');
+                this.focus();
+            }
+        });
+    });
+});
 </script>
 {% endblock %}

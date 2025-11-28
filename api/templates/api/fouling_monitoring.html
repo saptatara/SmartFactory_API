@@ -1,13 +1,84 @@
 {% extends "base.html" %}
 
-{% block title %}Fouling Monitoring - {{ device.name }}{% endblock %}
+{% block title %}Fouling Monitoring - {{ device.name }} - ZEROLOSS SYSTEMS{% endblock %}
+
+{% block extra_head %}
+<style>
+    .kpi-card {
+        background: linear-gradient(135deg, var(--bg-card) 0%, rgba(59, 130, 246, 0.1) 100%);
+        border-left: 4px solid var(--accent-primary);
+    }
+    
+    .sensor-value-card {
+        background: rgba(30, 41, 59, 0.8);
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+    
+    .sensor-value {
+        font-size: 1.5rem;
+        font-weight: 800;
+        color: var(--accent-primary);
+    }
+    
+    .sensor-label {
+        font-size: 0.9rem;
+        color: var(--text-muted);
+        text-transform: uppercase;
+    }
+</style>
+{% endblock %}
 
 {% block content %}
 <div class="row">
     <div class="col-12">
         <div class="page-header">
             <h1>Fouling Monitoring - {{ device.name }}</h1>
-            <p>Live fouling analysis, history & export for this heat exchanger.</p>
+            <p>Live fouling analysis using real-time sensor data from ZEROLOSS SYSTEMS</p>
+        </div>
+    </div>
+</div>
+
+<!-- Current Sensor Values -->
+<div class="row g-4 mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-sensor me-2"></i>Current Sensor Values</h5>
+            </div>
+            <div class="card-body">
+                <div class="row text-center" id="currentSensorValues">
+                    <div class="col-md-3">
+                        <div class="sensor-value-card">
+                            <div class="sensor-label">T1_in (°C)</div>
+                            <div class="sensor-value" id="t1_in_value">--</div>
+                            <small class="text-muted">Hot Inlet Temp</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="sensor-value-card">
+                            <div class="sensor-label">T1_out (°C)</div>
+                            <div class="sensor-value" id="t1_out_value">--</div>
+                            <small class="text-muted">Hot Outlet Temp</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="sensor-value-card">
+                            <div class="sensor-label">T2_in (°C)</div>
+                            <div class="sensor-value" id="t2_in_value">--</div>
+                            <small class="text-muted">Cold Inlet Temp</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="sensor-value-card">
+                            <div class="sensor-label">T2_out (°C)</div>
+                            <div class="sensor-value" id="t2_out_value">--</div>
+                            <small class="text-muted">Cold Outlet Temp</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -16,8 +87,8 @@
     <div class="col-md-8">
         <div class="card h-100">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">📊 Fouling Factor Trend</h5>
-                <small class="text-muted">Computed from t1_in/out & t2_in/out</small>
+                <h5 class="mb-0">📊 Fouling Factor Trend (LMTD Method)</h5>
+                <small class="text-muted">Computed from T1_in, T1_out, T2_in, T2_out sensor data</small>
             </div>
             <div class="card-body">
                 <canvas id="foulingChart" height="100"></canvas>
@@ -30,12 +101,35 @@
         <!-- Current Status -->
         <div class="card mb-3">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">🔥 Current Status</h5>
+                <h5 class="mb-0">🔥 Current Fouling Status</h5>
                 <button class="btn btn-sm btn-outline-light" onclick="showFoulingInfo()">?</button>
             </div>
             <div class="card-body">
                 <div id="currentStatus">
                     <p class="text-muted">Loading current fouling status...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- KPI Indicators -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0">📈 Performance KPIs</h5>
+            </div>
+            <div class="card-body">
+                <div id="kpiIndicators">
+                    <div class="mb-2">
+                        <small class="text-muted">Overall Heat Exchange Coefficient</small>
+                        <div class="fw-bold text-info" id="kpiUValue">-- W/m²·K</div>
+                    </div>
+                    <div class="mb-2">
+                        <small class="text-muted">Thermal Effectiveness</small>
+                        <div class="fw-bold text-success" id="kpiEffectiveness">--%</div>
+                    </div>
+                    <div class="mb-2">
+                        <small class="text-muted">Energy Impact</small>
+                        <div class="fw-bold text-warning" id="kpiEnergy">-- kW</div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -48,11 +142,11 @@
             <div class="card-body">
                 <form onsubmit="downloadFoulingCSV(); return false;">
                     <div class="mb-2">
-                        <label class="form-label small">From date</label>
+                        <label class="form-label small text-light">From date</label>
                         <input type="date" id="reportStart" class="form-control form-control-sm">
                     </div>
                     <div class="mb-2">
-                        <label class="form-label small">To date</label>
+                        <label class="form-label small text-light">To date</label>
                         <input type="date" id="reportEnd" class="form-control form-control-sm">
                     </div>
                     <div class="d-grid gap-2 mt-3">
@@ -78,7 +172,7 @@
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">🕒 Historical Fouling Data</h5>
-                <small class="text-muted">Last 50 points from device history API</small>
+                <small class="text-muted">Calculated using LMTD method from live sensor data</small>
             </div>
             <div class="card-body">
                 <div id="historicalData">
@@ -93,7 +187,9 @@
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
+const deviceId = {{ device.id }};
 const foulingHistoryUrl = "{% url 'device_fouling_history' device.id %}";
+const sensorDataUrl = "{% url 'get_sensor_data' device.id %}";
 const foulingReportCsvUrl = "{% url 'device_fouling_report_csv' device.id %}";
 const sensorReportCsvUrl = "{% url 'device_sensor_report_csv' device.id %}";
 
@@ -103,9 +199,11 @@ const foulingChart = new Chart(ctx, {
     data: {
         labels: [],
         datasets: [{
-            label: 'Fouling Factor (m²·K/W)',
+            label: 'Fouling Factor (m²·K/W) - LMTD Method',
             data: [],
-            borderWidth: 2,
+            borderWidth: 3,
+            borderColor: '#3b82f6',
+            backgroundColor: 'rgba(59, 130, 246, 0.1)',
             tension: 0.4,
             fill: true
         }]
@@ -118,20 +216,199 @@ const foulingChart = new Chart(ctx, {
                 title: {
                     display: true,
                     text: 'Fouling Factor (m²·K/W)'
+                },
+                grid: {
+                    color: 'rgba(255, 255, 255, 0.1)'
                 }
             },
             x: {
                 title: {
                     display: true,
                     text: 'Timestamp'
+                },
+                grid: {
+                    color: 'rgba(255, 255, 255, 0.1)'
+                }
+            }
+        },
+        plugins: {
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        return `Fouling: ${context.parsed.y.toExponential(4)} m²·K/W`;
+                    }
                 }
             }
         }
     }
 });
 
+// LMTD Calculation Function
+function calculateLMTD(T1_in, T1_out, T2_in, T2_out) {
+    const deltaT1 = T1_in - T2_out;
+    const deltaT2 = T1_out - T2_in;
+    
+    if (deltaT1 <= 0 || deltaT2 <= 0) {
+        return 0; // Invalid temperature difference
+    }
+    
+    if (Math.abs(deltaT1 - deltaT2) < 0.001) {
+        return deltaT1; // Use arithmetic mean if differences are equal
+    }
+    
+    return (deltaT1 - deltaT2) / Math.log(deltaT1 / deltaT2);
+}
+
+// Calculate fouling factor using LMTD method
+function calculateFoulingFactor(T1_in, T1_out, T2_in, T2_out, hot_flow_rate = 10, cold_flow_rate = 12, heat_transfer_area = 15.5, u_clean = 800) {
+    // Calculate heat duty (Q = m * Cp * ΔT)
+    const Cp = 4186; // Specific heat of water in J/kg·K
+    const heat_duty_hot = hot_flow_rate * Cp * (T1_in - T1_out);
+    const heat_duty_cold = cold_flow_rate * Cp * (T2_out - T2_in);
+    
+    // Use average heat duty
+    const heat_duty = (heat_duty_hot + heat_duty_cold) / 2;
+    
+    // Calculate LMTD
+    const lmtd = calculateLMTD(T1_in, T1_out, T2_in, T2_out);
+    
+    if (lmtd <= 0 || heat_duty <= 0) {
+        return {
+            fouling_factor: 0,
+            u_actual: 0,
+            performance_ratio: 0,
+            heat_duty: 0,
+            lmtd: 0,
+            severity: "Insufficient Data",
+            recommendation: "Check sensor readings",
+            risk_level: "Unknown"
+        };
+    }
+    
+    // Calculate actual U value
+    const u_actual = heat_duty / (heat_transfer_area * lmtd);
+    
+    // Calculate fouling factor
+    const fouling_factor = (1 / u_actual - 1 / u_clean);
+    
+    // Determine severity
+    let severity, color_code, recommendation, risk_level;
+    const performance_ratio = u_actual / u_clean;
+    
+    if (fouling_factor < 0.0001) {
+        severity = "No Fouling";
+        color_code = "success";
+        recommendation = "Optimal performance. Continue monitoring.";
+        risk_level = "Low";
+    } else if (fouling_factor < 0.0005) {
+        severity = "Minor Fouling";
+        color_code = "info";
+        recommendation = "Minor deposits detected. Schedule routine inspection.";
+        risk_level = "Low";
+    } else if (fouling_factor < 0.001) {
+        severity = "Moderate Fouling";
+        color_code = "warning";
+        recommendation = "Moderate fouling. Plan cleaning within 2-4 weeks.";
+        risk_level = "Medium";
+    } else if (fouling_factor < 0.002) {
+        severity = "Severe Fouling";
+        color_code = "danger";
+        recommendation = "Severe fouling. Schedule immediate cleaning.";
+        risk_level = "High";
+    } else {
+        severity = "Critical Fouling";
+        color_code = "dark";
+        recommendation = "Critical condition. Immediate maintenance required.";
+        risk_level = "Critical";
+    }
+    
+    return {
+        fouling_factor: Math.max(0, fouling_factor),
+        u_actual: u_actual,
+        u_clean: u_clean,
+        performance_ratio: performance_ratio,
+        heat_duty: heat_duty,
+        lmtd: lmtd,
+        severity: severity,
+        color_code: color_code,
+        recommendation: recommendation,
+        risk_level: risk_level
+    };
+}
+
+// Load current sensor values
+async function loadCurrentSensorValues() {
+    try {
+        const response = await fetch(sensorDataUrl + "?limit=1");
+        const data = await response.json();
+        
+        if (data.sensors) {
+            const sensors = data.sensors;
+            let T1_in, T1_out, T2_in, T2_out;
+            
+            // Extract sensor values
+            Object.keys(sensors).forEach(sensorKey => {
+                const readings = sensors[sensorKey];
+                if (readings && readings.length > 0) {
+                    const latestValue = readings[0].value;
+                    
+                    if (sensorKey.toLowerCase().includes('t1_in')) {
+                        T1_in = latestValue;
+                        document.getElementById('t1_in_value').textContent = latestValue.toFixed(1);
+                    } else if (sensorKey.toLowerCase().includes('t1_out')) {
+                        T1_out = latestValue;
+                        document.getElementById('t1_out_value').textContent = latestValue.toFixed(1);
+                    } else if (sensorKey.toLowerCase().includes('t2_in')) {
+                        T2_in = latestValue;
+                        document.getElementById('t2_in_value').textContent = latestValue.toFixed(1);
+                    } else if (sensorKey.toLowerCase().includes('t2_out')) {
+                        T2_out = latestValue;
+                        document.getElementById('t2_out_value').textContent = latestValue.toFixed(1);
+                    }
+                }
+            });
+            
+            // If we have all required sensor values, calculate current fouling
+            if (T1_in !== undefined && T1_out !== undefined && T2_in !== undefined && T2_out !== undefined) {
+                const currentFouling = calculateFoulingFactor(T1_in, T1_out, T2_in, T2_out);
+                updateCurrentStatus(currentFouling);
+                updateKPI(currentFouling);
+            }
+        }
+    } catch (error) {
+        console.error("Error loading sensor values:", error);
+    }
+}
+
+function updateCurrentStatus(foulingData) {
+    const statusDiv = document.getElementById('currentStatus');
+    const colorClass = `alert-${foulingData.color_code}`;
+    const perfPct = (foulingData.performance_ratio * 100).toFixed(1);
+
+    statusDiv.innerHTML = `
+        <div class="alert alert-${foulingData.color_code}">
+            <h6>${foulingData.severity}</h6>
+            <p><strong>Fouling Factor:</strong> ${foulingData.fouling_factor > 0 ? foulingData.fouling_factor.toExponential(4) : '0'} m²·K/W</p>
+            <p><strong>Performance Ratio:</strong> ${perfPct}% (U_actual / U_clean)</p>
+            <p><strong>Heat Duty:</strong> ${(foulingData.heat_duty / 1000).toFixed(1)} kW</p>
+            <p><strong>LMTD:</strong> ${foulingData.lmtd.toFixed(2)} °C</p>
+            <p><strong>Action:</strong> ${foulingData.recommendation}</p>
+            <p class="small text-muted mb-0">Calculated using LMTD method</p>
+        </div>
+    `;
+}
+
+function updateKPI(foulingData) {
+    document.getElementById('kpiUValue').textContent = `${foulingData.u_actual.toFixed(0)} W/m²·K`;
+    document.getElementById('kpiEffectiveness').textContent = `${(foulingData.performance_ratio * 100).toFixed(1)}%`;
+    document.getElementById('kpiEnergy').textContent = `${(foulingData.heat_duty / 1000).toFixed(1)} kW`;
+}
+
 document.addEventListener("DOMContentLoaded", function () {
     loadFoulingData();
+    loadCurrentSensorValues();
+    // Refresh sensor values every 30 seconds
+    setInterval(loadCurrentSensorValues, 30000);
 });
 
 function loadFoulingData() {
@@ -149,22 +426,31 @@ function loadFoulingData() {
                 chartMessage.textContent = "Not enough data to compute fouling history yet.";
                 document.getElementById('historicalData').innerHTML =
                     "<p class='text-muted'>No historical fouling records found. " +
-                    "Ensure t1_in, t1_out, t2_in, t2_out are being recorded.</p>";
+                    "Ensure T1_in, T1_out, T2_in, T2_out sensors are active.</p>";
                 document.getElementById('currentStatus').innerHTML =
                     "<p class='text-muted'>No data available to compute current fouling status.</p>";
                 return;
             }
 
-            const labels = data.map(d => d.timestamp);
+            const labels = data.map(d => {
+                try {
+                    return new Date(d.timestamp).toLocaleString('en-IN', {
+                        timeZone: 'Asia/Kolkata',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                } catch (e) {
+                    return d.timestamp;
+                }
+            });
             const values = data.map(d => d.fouling_factor);
 
             foulingChart.data.labels = labels;
             foulingChart.data.datasets[0].data = values;
             foulingChart.update();
-            chartMessage.textContent = "";
+            chartMessage.textContent = `Showing ${data.length} data points`;
 
             const latest = data[data.length - 1];
-            updateCurrentStatus(latest);
             updateHistoricalDataTable(data);
         })
         .catch(err => {
@@ -177,49 +463,39 @@ function loadFoulingData() {
         });
 }
 
-function updateCurrentStatus(point) {
-    const statusDiv = document.getElementById('currentStatus');
-    const colorClass = getColorFromSeverity(point.severity);
-    const perfPct = (point.performance_ratio * 100).toFixed(1);
-
-    statusDiv.innerHTML = `
-        <div class="alert alert-${colorClass}">
-            <h6>${point.severity}</h6>
-            <p><strong>Timestamp:</strong> ${point.timestamp}</p>
-            <p><strong>Fouling Factor:</strong> ${point.fouling_factor.toExponential(4)} m²·K/W</p>
-            <p><strong>Performance:</strong> ${perfPct}% (U_actual / U_clean)</p>
-            <p><strong>Action:</strong> ${point.recommendation}</p>
-        </div>
-    `;
-}
-
 function updateHistoricalDataTable(data) {
     const historicalDiv = document.getElementById('historicalData');
     let tableHTML = `
-        <table class="table table-dark table-striped table-sm">
-            <thead>
-                <tr>
-                    <th>Timestamp</th>
-                    <th>Fouling Factor (m²·K/W)</th>
-                    <th>Severity</th>
-                    <th>Performance</th>
-                </tr>
-            </thead>
-            <tbody>
+        <div class="table-responsive">
+            <table class="table table-dark table-striped table-sm">
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Fouling Factor (m²·K/W)</th>
+                        <th>U Actual (W/m²·K)</th>
+                        <th>Performance</th>
+                        <th>Severity</th>
+                    </tr>
+                </thead>
+                <tbody>
     `;
-    data.forEach(point => {
+    
+    data.slice(-20).reverse().forEach(point => {
         const ff = point.fouling_factor;
         const perfPct = (point.performance_ratio * 100).toFixed(1);
         const colorClass = getColorFromSeverity(point.severity);
+        
         tableHTML += `
             <tr>
                 <td>${point.timestamp}</td>
-                <td>${ff.toExponential(4)}</td>
-                <td><span class="badge bg-${colorClass}">${point.severity}</span></td>
+                <td>${ff > 0 ? ff.toExponential(4) : '0'}</td>
+                <td>${point.u_actual ? point.u_actual.toFixed(0) : 'N/A'}</td>
                 <td>${perfPct}%</td>
+                <td><span class="badge bg-${colorClass}">${point.severity}</span></td>
             </tr>`;
     });
-    tableHTML += `</tbody></table>`;
+    
+    tableHTML += `</tbody></table></div>`;
     historicalDiv.innerHTML = tableHTML;
 }
 
@@ -229,28 +505,36 @@ function getColorFromSeverity(severity) {
         'Minor Fouling': 'info',
         'Moderate Fouling': 'warning',
         'Severe Fouling': 'danger',
-        'Critical Fouling': 'dark'
+        'Critical Fouling': 'dark',
+        'Insufficient Data': 'secondary'
     };
     return colorMap[severity] || 'secondary';
 }
 
 function showFoulingInfo() {
-    alert(`Fouling Factor Information:
+    alert(`Fouling Factor Information - ZEROLOSS SYSTEMS
 
 📊 What is Fouling Factor?
 Fouling factor measures thermal resistance caused by deposits on heat transfer surfaces.
 
-🔍 Why it matters:
+🔍 LMTD Method:
+• Uses T1_in, T1_out, T2_in, T2_out sensor values
+• Calculates Log Mean Temperature Difference
+• Determines actual heat transfer coefficient
+
+💡 Why it matters:
 • Higher fouling = reduced heat transfer efficiency
 • Increased energy consumption
 • Potential equipment damage
 
-Typical interpretation (m²·K/W, example bands):
+Typical interpretation (m²·K/W):
 🟢 No Fouling:         < 0.0001
 🔵 Minor Fouling: 0.0001 - 0.0005
 🟡 Moderate:      0.0005 - 0.001
 🟠 Severe:        0.001  - 0.002
-🔴 Critical:           > 0.002`);
+🔴 Critical:           > 0.002
+
+Powered by ZEROLOSS SYSTEMS`);
 }
 
 function downloadFoulingCSV() {
@@ -274,4 +558,3 @@ function downloadSensorCSV() {
 }
 </script>
 {% endblock %}
-
