@@ -4,7 +4,9 @@
     <meta charset="UTF-8">
     <title>{% block title %}ZEROLOSS SYSTEMS - SmartFactory Pro - Industrial IoT Platform{% endblock %}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="icon" type="image/x-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏭</text></svg>">
+    
+    <!-- Use your actual logo file - update the path as needed -->
+    <link rel="icon" type="image/x-icon" href="/static/images/zeroloss-logo.ico">
 
     <!-- Bootstrap 5.3.2 -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -65,11 +67,17 @@
         }
 
         .zeroloss-logo {
-            height: 40px;
-            margin-right: 10px;
+            height: 35px;
+            margin-right: 12px;
             background: white;
-            padding: 5px;
-            border-radius: 5px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: 900;
+            color: #000;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Arial Black', sans-serif;
         }
 
         .nav-link {
@@ -278,6 +286,21 @@
             border-color: var(--border-subtle);
         }
 
+        /* Result text visibility */
+        .result-value {
+            color: var(--text-main) !important;
+            font-weight: 600;
+        }
+        
+        .result-card {
+            background: var(--bg-card) !important;
+            color: var(--text-main) !important;
+        }
+        
+        .result-card .card-body {
+            color: var(--text-main) !important;
+        }
+
         /* Custom scrollbar */
         ::-webkit-scrollbar {
             width: 8px;
@@ -322,6 +345,8 @@
             
             .zeroloss-logo {
                 height: 30px;
+                font-size: 0.9rem;
+                padding: 3px 6px;
             }
         }
     </style>
@@ -333,9 +358,9 @@
 <nav class="navbar navbar-expand-lg navbar-dark fixed-top">
     <div class="container">
         <a class="navbar-brand" href="{% url 'customer_dashboard' %}">
-            <!-- Replace with your actual logo path -->
-            <div style="background: white; padding: 5px; border-radius: 5px; margin-right: 10px; display: inline-flex; align-items: center;">
-                <span style="color: black; font-weight: 800; font-size: 1.2rem;">ZEROLOSS</span>
+            <!-- ZEROLOSS Logo - Text version since we don't have the image file -->
+            <div class="zeroloss-logo">
+                <strong>ZEROLOSS</strong>
             </div>
             SMARTFACTORY PRO
         </a>
@@ -404,6 +429,9 @@
     <div class="container">
         <p class="mb-0">
             <strong>Powered by ZEROLOSS SYSTEMS</strong> | Industrial IoT Platform for Smart Factory Solutions
+        </p>
+        <p class="small mb-0 mt-1">
+            Heat Exchanger Monitoring & Fouling Analysis | LMTD Method Calculations
         </p>
     </div>
 </footer>

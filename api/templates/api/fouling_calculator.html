@@ -31,6 +31,29 @@
         font-size: 0.75rem;
         margin-left: 0.5rem;
     }
+    
+    /* Fix result text visibility */
+    .result-value {
+        color: var(--text-main) !important;
+        font-weight: 600;
+        font-size: 1.1rem;
+    }
+    
+    .result-card {
+        background: var(--bg-card) !important;
+        color: var(--text-main) !important;
+    }
+    
+    .result-card .card-body {
+        color: var(--text-main) !important;
+    }
+    
+    .calculation-method {
+        background: rgba(59, 130, 246, 0.1);
+        padding: 1rem;
+        border-radius: 0.5rem;
+        border-left: 4px solid var(--accent-primary);
+    }
 </style>
 {% endblock %}
 
@@ -105,8 +128,8 @@
                                 <label class="form-label">Clean U Value (W/m²·K)</label>
                                 <div class="input-group">
                                     <input type="number" class="form-control" id="u_clean" step="1" value="800" required>
-                                    <button type="button" class="btn btn-outline-secondary" onclick="calculateCleanU()">
-                                        Calculate
+                                    <button type="button" class="btn btn-outline-primary" onclick="calculateCleanU()">
+                                        <i class="fas fa-calculator me-1"></i>Calculate
                                     </button>
                                 </div>
                                 <small class="text-muted">Clean overall heat transfer coefficient</small>
@@ -115,9 +138,6 @@
                     </div>
                     
                     <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                        <button type="button" id="calculateU" class="btn btn-outline-primary me-md-2">
-                            <i class="fas fa-calculator me-1"></i>Calculate Clean U
-                        </button>
                         <button type="submit" class="btn btn-primary">
                             <i class="fas fa-bolt me-1"></i>Calculate Fouling Factor
                         </button>
@@ -136,23 +156,25 @@
                 <h5 class="mb-0"><i class="fas fa-info-circle me-2"></i>Calculation Methodology</h5>
             </div>
             <div class="card-body">
-                <h6>LMTD (Log Mean Temperature Difference) Method:</h6>
-                <div class="row">
-                    <div class="col-md-6">
-                        <p><strong>Heat Duty Calculation:</strong></p>
-                        <p>Q = m_hot × Cp × (T1_in - T1_out)</p>
-                        <p>Q = m_cold × Cp × (T2_out - T2_in)</p>
+                <div class="calculation-method">
+                    <h6 class="text-primary">LMTD (Log Mean Temperature Difference) Method:</h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p class="result-value">Heat Duty Calculation:</p>
+                            <p>Q = m_hot × Cp × (T1_in - T1_out)</p>
+                            <p>Q = m_cold × Cp × (T2_out - T2_in)</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p class="result-value">LMTD Calculation:</p>
+                            <p>ΔT1 = T1_in - T2_out</p>
+                            <p>ΔT2 = T1_out - T2_in</p>
+                            <p>LMTD = (ΔT1 - ΔT2) / ln(ΔT1/ΔT2)</p>
+                        </div>
                     </div>
-                    <div class="col-md-6">
-                        <p><strong>LMTD Calculation:</strong></p>
-                        <p>ΔT1 = T1_in - T2_out</p>
-                        <p>ΔT2 = T1_out - T2_in</p>
-                        <p>LMTD = (ΔT1 - ΔT2) / ln(ΔT1/ΔT2)</p>
-                    </div>
+                    <p class="result-value mt-3">Fouling Factor:</p>
+                    <p>Rf = (1/U_actual - 1/U_clean)</p>
+                    <p class="small text-muted mb-0">Where: Cp = 4186 J/kg·K (water), U_actual = Q / (A × LMTD)</p>
                 </div>
-                <p><strong>Fouling Factor:</strong></p>
-                <p>Rf = (1/U_actual - 1/U_clean)</p>
-                <p class="small text-muted mb-0">Where: Cp = 4186 J/kg·K (water), U_actual = Q / (A × LMTD)</p>
             </div>
         </div>
     </div>
@@ -164,27 +186,30 @@ document.getElementById('foulingForm').addEventListener('submit', function(e) {
     calculateFouling();
 });
 
-document.getElementById('calculateU').addEventListener('click', function() {
-    calculateCleanU();
-});
-
 // LMTD Calculation Function
 function calculateLMTD(T1_in, T1_out, T2_in, T2_out) {
     const deltaT1 = T1_in - T2_out;
     const deltaT2 = T1_out - T2_in;
     
+    console.log("LMTD Calculation:", { T1_in, T1_out, T2_in, T2_out, deltaT1, deltaT2 });
+    
     if (deltaT1 <= 0 || deltaT2 <= 0) {
-        return 0; // Invalid temperature difference
+        console.error("Invalid temperature differences for LMTD");
+        return 0;
     }
     
     if (Math.abs(deltaT1 - deltaT2) < 0.001) {
-        return deltaT1; // Use arithmetic mean if differences are equal
+        return deltaT1;
     }
     
-    return (deltaT1 - deltaT2) / Math.log(deltaT1 / deltaT2);
+    const lmtd = (deltaT1 - deltaT2) / Math.log(deltaT1 / deltaT2);
+    console.log("Calculated LMTD:", lmtd);
+    return lmtd;
 }
 
 function calculateFouling() {
+    console.log("Starting fouling calculation...");
+    
     // Get all input values
     const hot_flow_rate = parseFloat(document.getElementById('hot_flow_rate').value);
     const cold_flow_rate = parseFloat(document.getElementById('cold_flow_rate').value);
@@ -193,11 +218,31 @@ function calculateFouling() {
     const cold_inlet_temp = parseFloat(document.getElementById('cold_inlet_temp').value);
     const cold_outlet_temp = parseFloat(document.getElementById('cold_outlet_temp').value);
     const heat_transfer_area = parseFloat(document.getElementById('heat_transfer_area').value);
-    const u_clean = parseFloat(document.getElementById('u_clean').value);
+    const u_clean_input = document.getElementById('u_clean').value;
+    const u_clean = parseFloat(u_clean_input);
+
+    console.log("Input values:", {
+        hot_flow_rate, cold_flow_rate, hot_inlet_temp, hot_outlet_temp, 
+        cold_inlet_temp, cold_outlet_temp, heat_transfer_area, u_clean
+    });
 
     // Validate inputs
-    if (Object.values({hot_flow_rate, cold_flow_rate, hot_inlet_temp, hot_outlet_temp, cold_inlet_temp, cold_outlet_temp, heat_transfer_area, u_clean}).some(val => isNaN(val))) {
-        alert('Please fill in all fields with valid numbers');
+    const inputs = {
+        hot_flow_rate, cold_flow_rate, hot_inlet_temp, hot_outlet_temp, 
+        cold_inlet_temp, cold_outlet_temp, heat_transfer_area, u_clean
+    };
+    
+    for (const [key, value] of Object.entries(inputs)) {
+        if (isNaN(value) || value === '') {
+            alert(`Please fill in all fields with valid numbers. Invalid field: ${key}`);
+            return;
+        }
+    }
+
+    // Additional validation for U_clean
+    if (u_clean <= 0) {
+        alert('Clean U value must be greater than 0');
+        document.getElementById('u_clean').focus();
         return;
     }
 
@@ -213,40 +258,61 @@ function calculateFouling() {
     // Use average heat duty
     const heat_duty = (heat_duty_hot + heat_duty_cold) / 2;
     
+    console.log("Heat duty calculations:", { heat_duty_hot, heat_duty_cold, heat_duty });
+    
     // Calculate LMTD
     const lmtd = calculateLMTD(hot_inlet_temp, hot_outlet_temp, cold_inlet_temp, cold_outlet_temp);
     
+    console.log("LMTD result:", lmtd);
+    
     if (lmtd <= 0) {
-        alert('Invalid temperature values. Please check that T1_in > T2_out and T1_out > T2_in.');
+        alert('Invalid temperature values for LMTD calculation. Please check that:\n• T1_in > T2_out\n• T1_out > T2_in\n• All temperatures are valid');
+        return;
+    }
+
+    if (heat_transfer_area <= 0) {
+        alert('Heat transfer area must be greater than 0');
         return;
     }
 
     // Calculate actual U value
     const u_actual = heat_duty / (heat_transfer_area * lmtd);
     
-    // Calculate fouling factor
-    const fouling_factor = Math.max(0, (1 / u_actual - 1 / u_clean));
+    console.log("U_actual calculation:", { heat_duty, heat_transfer_area, lmtd, u_actual });
     
+    if (u_actual <= 0) {
+        alert('Calculated U_actual value is invalid. Please check your input parameters.');
+        return;
+    }
+
+    // Calculate fouling factor
+    const fouling_factor = (1 / u_actual - 1 / u_clean);
+    const valid_fouling_factor = Math.max(0, fouling_factor);
+    
+    console.log("Fouling factor calculation:", { 
+        u_actual, u_clean, fouling_factor, valid_fouling_factor 
+    });
+
     // Determine severity
     let severity, color_code, recommendation, risk_level;
     const performance_ratio = u_actual / u_clean;
 
-    if (fouling_factor < 0.0001) {
+    if (valid_fouling_factor < 0.0001) {
         severity = "No Fouling";
         color_code = "success";
         recommendation = "Optimal performance. Continue regular monitoring.";
         risk_level = "Low";
-    } else if (fouling_factor < 0.0005) {
+    } else if (valid_fouling_factor < 0.0005) {
         severity = "Minor Fouling";
         color_code = "info";
         recommendation = "Minor deposits detected. Schedule routine inspection.";
         risk_level = "Low";
-    } else if (fouling_factor < 0.001) {
+    } else if (valid_fouling_factor < 0.001) {
         severity = "Moderate Fouling";
         color_code = "warning";
         recommendation = "Moderate fouling detected. Plan cleaning within 2-4 weeks.";
         risk_level = "Medium";
-    } else if (fouling_factor < 0.002) {
+    } else if (valid_fouling_factor < 0.002) {
         severity = "Severe Fouling";
         color_code = "danger";
         recommendation = "Severe fouling. Schedule immediate cleaning to prevent damage.";
@@ -258,9 +324,19 @@ function calculateFouling() {
         risk_level = "Critical";
     }
 
+    console.log("Final results:", {
+        fouling_factor: valid_fouling_factor,
+        u_actual,
+        u_clean,
+        performance_ratio,
+        heat_duty,
+        lmtd,
+        severity
+    });
+
     // Display results
     displayResults({
-        fouling_factor: fouling_factor,
+        fouling_factor: valid_fouling_factor,
         u_actual: u_actual,
         u_clean: u_clean,
         performance_ratio: performance_ratio,
@@ -275,6 +351,8 @@ function calculateFouling() {
 }
 
 function calculateCleanU() {
+    console.log("Calculating clean U value...");
+    
     const hot_flow_rate = parseFloat(document.getElementById('hot_flow_rate').value);
     const cold_flow_rate = parseFloat(document.getElementById('cold_flow_rate').value);
     const hot_inlet_temp = parseFloat(document.getElementById('hot_inlet_temp').value);
@@ -284,13 +362,20 @@ function calculateCleanU() {
     const heat_transfer_area = parseFloat(document.getElementById('heat_transfer_area').value);
 
     // Validate inputs
-    if (Object.values({hot_flow_rate, cold_flow_rate, hot_inlet_temp, hot_outlet_temp, cold_inlet_temp, cold_outlet_temp, heat_transfer_area}).some(val => isNaN(val))) {
-        alert('Please fill in all fields with valid numbers');
-        return;
+    const inputs = {
+        hot_flow_rate, cold_flow_rate, hot_inlet_temp, hot_outlet_temp, 
+        cold_inlet_temp, cold_outlet_temp, heat_transfer_area
+    };
+    
+    for (const [key, value] of Object.entries(inputs)) {
+        if (isNaN(value) || value === '') {
+            alert(`Please fill in all fields with valid numbers. Invalid field: ${key}`);
+            return;
+        }
     }
 
     // Calculate clean U value assuming no fouling
-    const Cp = 4186; // Specific heat of water in J/kg·K
+    const Cp = 4186;
     const heat_duty_hot = hot_flow_rate * Cp * (hot_inlet_temp - hot_outlet_temp);
     const heat_duty_cold = cold_flow_rate * Cp * (cold_outlet_temp - cold_inlet_temp);
     const heat_duty = (heat_duty_hot + heat_duty_cold) / 2;
@@ -298,32 +383,51 @@ function calculateCleanU() {
     const lmtd = calculateLMTD(hot_inlet_temp, hot_outlet_temp, cold_inlet_temp, cold_outlet_temp);
     
     if (lmtd <= 0) {
-        alert('Invalid temperature values for clean U calculation.');
+        alert('Invalid temperature values for clean U calculation. Please check temperature inputs.');
+        return;
+    }
+
+    if (heat_transfer_area <= 0) {
+        alert('Heat transfer area must be greater than 0');
         return;
     }
 
     const u_clean = heat_duty / (heat_transfer_area * lmtd);
     
+    console.log("Calculated clean U:", u_clean);
+    
+    if (u_clean <= 0 || !isFinite(u_clean)) {
+        alert('Invalid clean U value calculated. Please check your input parameters.');
+        return;
+    }
+
     document.getElementById('u_clean').value = u_clean.toFixed(2);
     
     // Show success message
     const resultsDiv = document.getElementById('results');
     resultsDiv.innerHTML = `
-        <div class="alert alert-info">
-            <h6><i class="fas fa-check-circle me-2"></i>Clean U Value Calculated</h6>
-            <p><strong>Clean U Value:</strong> ${u_clean.toFixed(2)} W/m²·K</p>
-            <p class="small mb-0">This value represents the ideal heat transfer coefficient with no fouling.</p>
+        <div class="card result-card">
+            <div class="card-header bg-info">
+                <h5 class="mb-0 text-white"><i class="fas fa-check-circle me-2"></i>Clean U Value Calculated</h5>
+            </div>
+            <div class="card-body">
+                <p class="result-value"><strong>Clean U Value:</strong> ${u_clean.toFixed(2)} W/m²·K</p>
+                <p class="result-value"><strong>Calculation Method:</strong> LMTD with current parameters</p>
+                <p class="small text-muted mb-0">This value represents the ideal heat transfer coefficient with no fouling. You can now calculate the fouling factor.</p>
+            </div>
         </div>
     `;
     resultsDiv.style.display = 'block';
+    
+    // Scroll to results
+    resultsDiv.scrollIntoView({ behavior: 'smooth' });
 }
 
 function displayResults(data) {
     const resultsDiv = document.getElementById('results');
-    const severityClass = `alert-${data.color_code}`;
     
     resultsDiv.innerHTML = `
-        <div class="card">
+        <div class="card result-card">
             <div class="card-header bg-${data.color_code}">
                 <h5 class="mb-0 text-white"><i class="fas fa-chart-bar me-2"></i>Calculation Results - LMTD Method</h5>
             </div>
@@ -332,25 +436,29 @@ function displayResults(data) {
                     <div class="col-md-6">
                         <div class="calculation-section">
                             <h6 class="text-primary">Fouling Analysis</h6>
-                            <p><strong>Fouling Factor:</strong> <span class="badge bg-${data.color_code}">${data.fouling_factor.toExponential(4)} m²·K/W</span></p>
-                            <p><strong>Severity:</strong> <span class="badge bg-${data.color_code}">${data.severity}</span></p>
-                            <p><strong>Risk Level:</strong> ${data.risk_level}</p>
-                            <p><strong>Performance Ratio:</strong> ${(data.performance_ratio * 100).toFixed(1)}%</p>
+                            <p class="result-value"><strong>Fouling Factor:</strong> 
+                                <span class="badge bg-${data.color_code}">${data.fouling_factor.toExponential(4)} m²·K/W</span>
+                            </p>
+                            <p class="result-value"><strong>Severity:</strong> 
+                                <span class="badge bg-${data.color_code}">${data.severity}</span>
+                            </p>
+                            <p class="result-value"><strong>Risk Level:</strong> ${data.risk_level}</p>
+                            <p class="result-value"><strong>Performance Ratio:</strong> ${(data.performance_ratio * 100).toFixed(1)}%</p>
                         </div>
                     </div>
                     <div class="col-md-6">
                         <div class="calculation-section">
                             <h6 class="text-info">Performance Metrics</h6>
-                            <p><strong>Actual U Value:</strong> ${data.u_actual.toFixed(2)} W/m²·K</p>
-                            <p><strong>Clean U Value:</strong> ${data.u_clean.toFixed(2)} W/m²·K</p>
-                            <p><strong>Heat Duty:</strong> ${(data.heat_duty / 1000).toFixed(2)} kW</p>
-                            <p><strong>LMTD:</strong> ${data.lmtd.toFixed(2)} °C</p>
+                            <p class="result-value"><strong>Actual U Value:</strong> ${data.u_actual.toFixed(2)} W/m²·K</p>
+                            <p class="result-value"><strong>Clean U Value:</strong> ${data.u_clean.toFixed(2)} W/m²·K</p>
+                            <p class="result-value"><strong>Heat Duty:</strong> ${(data.heat_duty / 1000).toFixed(2)} kW</p>
+                            <p class="result-value"><strong>LMTD:</strong> ${data.lmtd.toFixed(2)} °C</p>
                         </div>
                     </div>
                 </div>
                 <div class="mt-3">
-                    <h6>Recommendation</h6>
-                    <div class="alert ${severityClass}">
+                    <h6 class="text-white">Recommendation</h6>
+                    <div class="alert alert-${data.color_code}">
                         <i class="fas fa-lightbulb me-2"></i>${data.recommendation}
                     </div>
                 </div>
@@ -380,6 +488,18 @@ document.addEventListener('DOMContentLoaded', function() {
             const value = parseFloat(this.value);
             if (value < -50 || value > 500) {
                 alert('Temperature values should be between -50°C and 500°C');
+                this.focus();
+            }
+        });
+    });
+    
+    // Validate flow rates
+    const flowInputs = ['hot_flow_rate', 'cold_flow_rate'];
+    flowInputs.forEach(id => {
+        document.getElementById(id).addEventListener('change', function() {
+            const value = parseFloat(this.value);
+            if (value <= 0 || value > 1000) {
+                alert('Flow rate must be between 0.01 and 1000 kg/s');
                 this.focus();
             }
         });
