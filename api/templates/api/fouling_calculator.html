@@ -23,16 +23,6 @@
         margin: 1rem 0;
     }
     
-    .live-data-badge {
-        background: var(--accent-success);
-        color: white;
-        padding: 0.25rem 0.5rem;
-        border-radius: 0.25rem;
-        font-size: 0.75rem;
-        margin-left: 0.5rem;
-    }
-    
-    /* Fix result text visibility */
     .result-value {
         color: var(--text-main) !important;
         font-weight: 600;
@@ -54,6 +44,14 @@
         border-radius: 0.5rem;
         border-left: 4px solid var(--accent-primary);
     }
+    
+    .engineering-note {
+        background: rgba(245, 158, 11, 0.1);
+        border-left: 4px solid var(--accent-warning);
+        padding: 1rem;
+        border-radius: 0.5rem;
+        margin: 1rem 0;
+    }
 </style>
 {% endblock %}
 
@@ -62,54 +60,56 @@
     <div class="col-md-10 offset-md-1">
         <div class="page-header">
             <h1>🧮 Heat Exchanger Fouling Factor Calculator</h1>
-            <p class="text-muted">Calculate fouling factor using LMTD method - ZEROLOSS SYSTEMS</p>
+            <p class="text-muted">Calculate fouling factor using actual vs clean condition comparison - ZEROLOSS SYSTEMS</p>
         </div>
         
         <div class="card">
             <div class="card-header">
-                <h5 class="mb-0"><i class="fas fa-calculator me-2"></i>Calculator Parameters (LMTD Method)</h5>
+                <h5 class="mb-0"><i class="fas fa-calculator me-2"></i>Calculator Parameters</h5>
             </div>
             <div class="card-body">
+                <div class="engineering-note">
+                    <h6><i class="fas fa-graduation-cap me-2"></i>Engineering Method</h6>
+                    <p class="mb-1"><strong>Fouling Factor = 1/U_actual - 1/U_clean</strong></p>
+                    <p class="mb-0 small">Where U_actual is calculated from actual operating conditions, and U_clean is the design/clean condition value.</p>
+                </div>
+                
                 <form id="foulingForm">
                     <div class="row">
                         <div class="col-md-6">
                             <div class="calculation-section">
-                                <h6 class="text-primary">🔥 Hot Fluid Parameters</h6>
+                                <h6 class="text-warning">🔥 Actual Operating Conditions</h6>
                                 <div class="mb-3">
-                                    <label class="form-label">Flow Rate (kg/s)</label>
+                                    <label class="form-label">Hot Flow Rate (kg/s)</label>
                                     <input type="number" class="form-control" id="hot_flow_rate" step="0.01" value="10" required>
-                                    <small class="text-muted">Mass flow rate of hot fluid</small>
+                                    <small class="text-muted">Actual hot fluid flow rate</small>
                                 </div>
                                 <div class="mb-3">
-                                    <label class="form-label">Inlet Temperature T1_in (°C)</label>
+                                    <label class="form-label">Hot Inlet T1_in (°C)</label>
                                     <input type="number" class="form-control" id="hot_inlet_temp" step="0.1" value="85" required>
-                                    <small class="text-muted">Hot side inlet temperature</small>
                                 </div>
                                 <div class="mb-3">
-                                    <label class="form-label">Outlet Temperature T1_out (°C)</label>
+                                    <label class="form-label">Hot Outlet T1_out (°C)</label>
                                     <input type="number" class="form-control" id="hot_outlet_temp" step="0.1" value="45" required>
-                                    <small class="text-muted">Hot side outlet temperature</small>
                                 </div>
                             </div>
                         </div>
                         
                         <div class="col-md-6">
                             <div class="calculation-section">
-                                <h6 class="text-info">❄️ Cold Fluid Parameters</h6>
+                                <h6 class="text-info">❄️ Actual Operating Conditions</h6>
                                 <div class="mb-3">
-                                    <label class="form-label">Flow Rate (kg/s)</label>
+                                    <label class="form-label">Cold Flow Rate (kg/s)</label>
                                     <input type="number" class="form-control" id="cold_flow_rate" step="0.01" value="12" required>
-                                    <small class="text-muted">Mass flow rate of cold fluid</small>
+                                    <small class="text-muted">Actual cold fluid flow rate</small>
                                 </div>
                                 <div class="mb-3">
-                                    <label class="form-label">Inlet Temperature T2_in (°C)</label>
+                                    <label class="form-label">Cold Inlet T2_in (°C)</label>
                                     <input type="number" class="form-control" id="cold_inlet_temp" step="0.1" value="25" required>
-                                    <small class="text-muted">Cold side inlet temperature</small>
                                 </div>
                                 <div class="mb-3">
-                                    <label class="form-label">Outlet Temperature T2_out (°C)</label>
+                                    <label class="form-label">Cold Outlet T2_out (°C)</label>
                                     <input type="number" class="form-control" id="cold_outlet_temp" step="0.1" value="40" required>
-                                    <small class="text-muted">Cold side outlet temperature</small>
                                 </div>
                             </div>
                         </div>
@@ -126,13 +126,8 @@
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label class="form-label">Clean U Value (W/m²·K)</label>
-                                <div class="input-group">
-                                    <input type="number" class="form-control" id="u_clean" step="1" value="800" required>
-                                    <button type="button" class="btn btn-outline-primary" onclick="calculateCleanU()">
-                                        <i class="fas fa-calculator me-1"></i>Calculate
-                                    </button>
-                                </div>
-                                <small class="text-muted">Clean overall heat transfer coefficient</small>
+                                <input type="number" class="form-control" id="u_clean" step="0.01" value="800.00" required>
+                                <small class="text-muted">Design/clean heat transfer coefficient</small>
                             </div>
                         </div>
                     </div>
@@ -153,27 +148,27 @@
         <!-- Calculation Methodology -->
         <div class="card mt-4">
             <div class="card-header">
-                <h5 class="mb-0"><i class="fas fa-info-circle me-2"></i>Calculation Methodology</h5>
+                <h5 class="mb-0"><i class="fas fa-info-circle me-2"></i>Engineering Calculation Methodology</h5>
             </div>
             <div class="card-body">
                 <div class="calculation-method">
-                    <h6 class="text-primary">LMTD (Log Mean Temperature Difference) Method:</h6>
+                    <h6 class="text-primary">Correct Fouling Factor Calculation:</h6>
                     <div class="row">
                         <div class="col-md-6">
-                            <p class="result-value">Heat Duty Calculation:</p>
-                            <p>Q = m_hot × Cp × (T1_in - T1_out)</p>
-                            <p>Q = m_cold × Cp × (T2_out - T2_in)</p>
+                            <p class="result-value">Actual Conditions:</p>
+                            <p>Q_actual = m × Cp × ΔT_actual</p>
+                            <p>LMTD_actual = f(T1_in, T1_out, T2_in, T2_out)</p>
+                            <p>U_actual = Q_actual / (A × LMTD_actual)</p>
                         </div>
                         <div class="col-md-6">
-                            <p class="result-value">LMTD Calculation:</p>
-                            <p>ΔT1 = T1_in - T2_out</p>
-                            <p>ΔT2 = T1_out - T2_in</p>
-                            <p>LMTD = (ΔT1 - ΔT2) / ln(ΔT1/ΔT2)</p>
+                            <p class="result-value">Fouling Factor:</p>
+                            <p>Rf = 1/U_actual - 1/U_clean</p>
+                            <br>
+                            <p class="result-value">Performance Ratio:</p>
+                            <p>η = U_actual / U_clean × 100%</p>
                         </div>
                     </div>
-                    <p class="result-value mt-3">Fouling Factor:</p>
-                    <p>Rf = (1/U_actual - 1/U_clean)</p>
-                    <p class="small text-muted mb-0">Where: Cp = 4186 J/kg·K (water), U_actual = Q / (A × LMTD)</p>
+                    <p class="small text-muted mb-0 mt-2">This method compares ACTUAL operating conditions against DESIGN/clean conditions to calculate the true fouling factor.</p>
                 </div>
             </div>
         </div>
@@ -186,15 +181,13 @@ document.getElementById('foulingForm').addEventListener('submit', function(e) {
     calculateFouling();
 });
 
-// LMTD Calculation Function
-function calculateLMTD(T1_in, T1_out, T2_in, T2_out) {
-    const deltaT1 = T1_in - T2_out;
-    const deltaT2 = T1_out - T2_in;
-    
-    console.log("LMTD Calculation:", { T1_in, T1_out, T2_in, T2_out, deltaT1, deltaT2 });
+// PARALLEL FLOW LMTD Calculation Function
+function calculateParallelLMTD(T1_in, T1_out, T2_in, T2_out) {
+    // For parallel flow: ΔT1 = T1_in - T2_in, ΔT2 = T1_out - T2_out
+    const deltaT1 = T1_in - T2_in;
+    const deltaT2 = T1_out - T2_out;
     
     if (deltaT1 <= 0 || deltaT2 <= 0) {
-        console.error("Invalid temperature differences for LMTD");
         return 0;
     }
     
@@ -202,13 +195,11 @@ function calculateLMTD(T1_in, T1_out, T2_in, T2_out) {
         return deltaT1;
     }
     
-    const lmtd = (deltaT1 - deltaT2) / Math.log(deltaT1 / deltaT2);
-    console.log("Calculated LMTD:", lmtd);
-    return lmtd;
+    return (deltaT1 - deltaT2) / Math.log(deltaT1 / deltaT2);
 }
 
 function calculateFouling() {
-    console.log("Starting fouling calculation...");
+    console.log("Starting CORRECT fouling calculation...");
     
     // Get all input values
     const hot_flow_rate = parseFloat(document.getElementById('hot_flow_rate').value);
@@ -218,8 +209,7 @@ function calculateFouling() {
     const cold_inlet_temp = parseFloat(document.getElementById('cold_inlet_temp').value);
     const cold_outlet_temp = parseFloat(document.getElementById('cold_outlet_temp').value);
     const heat_transfer_area = parseFloat(document.getElementById('heat_transfer_area').value);
-    const u_clean_input = document.getElementById('u_clean').value;
-    const u_clean = parseFloat(u_clean_input);
+    const u_clean = parseFloat(document.getElementById('u_clean').value);
 
     console.log("Input values:", {
         hot_flow_rate, cold_flow_rate, hot_inlet_temp, hot_outlet_temp, 
@@ -233,40 +223,46 @@ function calculateFouling() {
     };
     
     for (const [key, value] of Object.entries(inputs)) {
-        if (isNaN(value) || value === '') {
+        if (isNaN(value)) {
             alert(`Please fill in all fields with valid numbers. Invalid field: ${key}`);
             return;
         }
     }
 
-    // Additional validation for U_clean
+    // Validate temperatures for parallel flow
+    if (hot_inlet_temp <= cold_inlet_temp) {
+        alert('For parallel flow: T1_in must be greater than T2_in');
+        document.getElementById('hot_inlet_temp').focus();
+        return;
+    }
+    
+    if (hot_outlet_temp <= cold_outlet_temp) {
+        alert('For parallel flow: T1_out must be greater than T2_out');
+        document.getElementById('hot_outlet_temp').focus();
+        return;
+    }
+
     if (u_clean <= 0) {
         alert('Clean U value must be greater than 0');
         document.getElementById('u_clean').focus();
         return;
     }
 
-    // Calculate heat duty using LMTD method
+    // CORRECT CALCULATION: Calculate from ACTUAL operating conditions
     const Cp = 4186; // Specific heat of water in J/kg·K
     
-    // Heat duty from hot side
+    // Calculate actual heat duty from measured temperatures
     const heat_duty_hot = hot_flow_rate * Cp * (hot_inlet_temp - hot_outlet_temp);
-    
-    // Heat duty from cold side  
     const heat_duty_cold = cold_flow_rate * Cp * (cold_outlet_temp - cold_inlet_temp);
+    const heat_duty_actual = (heat_duty_hot + heat_duty_cold) / 2;
     
-    // Use average heat duty
-    const heat_duty = (heat_duty_hot + heat_duty_cold) / 2;
+    // Calculate actual LMTD from measured temperatures
+    const lmtd_actual = calculateParallelLMTD(hot_inlet_temp, hot_outlet_temp, cold_inlet_temp, cold_outlet_temp);
     
-    console.log("Heat duty calculations:", { heat_duty_hot, heat_duty_cold, heat_duty });
+    console.log("Actual conditions:", { heat_duty_actual, lmtd_actual });
     
-    // Calculate LMTD
-    const lmtd = calculateLMTD(hot_inlet_temp, hot_outlet_temp, cold_inlet_temp, cold_outlet_temp);
-    
-    console.log("LMTD result:", lmtd);
-    
-    if (lmtd <= 0) {
-        alert('Invalid temperature values for LMTD calculation. Please check that:\n• T1_in > T2_out\n• T1_out > T2_in\n• All temperatures are valid');
+    if (lmtd_actual <= 0) {
+        alert('Invalid temperature values for LMTD calculation. Please check temperature inputs.');
         return;
     }
 
@@ -275,18 +271,21 @@ function calculateFouling() {
         return;
     }
 
-    // Calculate actual U value
-    const u_actual = heat_duty / (heat_transfer_area * lmtd);
+    // Calculate actual U value from current operating conditions
+    const u_actual = heat_duty_actual / (heat_transfer_area * lmtd_actual);
     
-    console.log("U_actual calculation:", { heat_duty, heat_transfer_area, lmtd, u_actual });
+    console.log("U_actual calculation:", { heat_duty_actual, heat_transfer_area, lmtd_actual, u_actual });
     
-    if (u_actual <= 0) {
+    if (u_actual <= 0 || !isFinite(u_actual)) {
         alert('Calculated U_actual value is invalid. Please check your input parameters.');
         return;
     }
 
-    // Calculate fouling factor
-    const fouling_factor = (1 / u_actual - 1 / u_clean);
+    // CORRECT Fouling Factor Calculation
+    let fouling_factor = 0;
+    if (u_actual > 0 && u_clean > 0) {
+        fouling_factor = (1 / u_actual - 1 / u_clean);
+    }
     const valid_fouling_factor = Math.max(0, fouling_factor);
     
     console.log("Fouling factor calculation:", { 
@@ -329,8 +328,8 @@ function calculateFouling() {
         u_actual,
         u_clean,
         performance_ratio,
-        heat_duty,
-        lmtd,
+        heat_duty_actual,
+        lmtd_actual,
         severity
     });
 
@@ -340,8 +339,8 @@ function calculateFouling() {
         u_actual: u_actual,
         u_clean: u_clean,
         performance_ratio: performance_ratio,
-        heat_duty: heat_duty,
-        lmtd: lmtd,
+        heat_duty: heat_duty_actual,
+        lmtd_actual: lmtd_actual,
         severity: severity,
         color_code: color_code,
         recommendation: recommendation,
@@ -350,86 +349,13 @@ function calculateFouling() {
     });
 }
 
-function calculateCleanU() {
-    console.log("Calculating clean U value...");
-    
-    const hot_flow_rate = parseFloat(document.getElementById('hot_flow_rate').value);
-    const cold_flow_rate = parseFloat(document.getElementById('cold_flow_rate').value);
-    const hot_inlet_temp = parseFloat(document.getElementById('hot_inlet_temp').value);
-    const hot_outlet_temp = parseFloat(document.getElementById('hot_outlet_temp').value);
-    const cold_inlet_temp = parseFloat(document.getElementById('cold_inlet_temp').value);
-    const cold_outlet_temp = parseFloat(document.getElementById('cold_outlet_temp').value);
-    const heat_transfer_area = parseFloat(document.getElementById('heat_transfer_area').value);
-
-    // Validate inputs
-    const inputs = {
-        hot_flow_rate, cold_flow_rate, hot_inlet_temp, hot_outlet_temp, 
-        cold_inlet_temp, cold_outlet_temp, heat_transfer_area
-    };
-    
-    for (const [key, value] of Object.entries(inputs)) {
-        if (isNaN(value) || value === '') {
-            alert(`Please fill in all fields with valid numbers. Invalid field: ${key}`);
-            return;
-        }
-    }
-
-    // Calculate clean U value assuming no fouling
-    const Cp = 4186;
-    const heat_duty_hot = hot_flow_rate * Cp * (hot_inlet_temp - hot_outlet_temp);
-    const heat_duty_cold = cold_flow_rate * Cp * (cold_outlet_temp - cold_inlet_temp);
-    const heat_duty = (heat_duty_hot + heat_duty_cold) / 2;
-    
-    const lmtd = calculateLMTD(hot_inlet_temp, hot_outlet_temp, cold_inlet_temp, cold_outlet_temp);
-    
-    if (lmtd <= 0) {
-        alert('Invalid temperature values for clean U calculation. Please check temperature inputs.');
-        return;
-    }
-
-    if (heat_transfer_area <= 0) {
-        alert('Heat transfer area must be greater than 0');
-        return;
-    }
-
-    const u_clean = heat_duty / (heat_transfer_area * lmtd);
-    
-    console.log("Calculated clean U:", u_clean);
-    
-    if (u_clean <= 0 || !isFinite(u_clean)) {
-        alert('Invalid clean U value calculated. Please check your input parameters.');
-        return;
-    }
-
-    document.getElementById('u_clean').value = u_clean.toFixed(2);
-    
-    // Show success message
-    const resultsDiv = document.getElementById('results');
-    resultsDiv.innerHTML = `
-        <div class="card result-card">
-            <div class="card-header bg-info">
-                <h5 class="mb-0 text-white"><i class="fas fa-check-circle me-2"></i>Clean U Value Calculated</h5>
-            </div>
-            <div class="card-body">
-                <p class="result-value"><strong>Clean U Value:</strong> ${u_clean.toFixed(2)} W/m²·K</p>
-                <p class="result-value"><strong>Calculation Method:</strong> LMTD with current parameters</p>
-                <p class="small text-muted mb-0">This value represents the ideal heat transfer coefficient with no fouling. You can now calculate the fouling factor.</p>
-            </div>
-        </div>
-    `;
-    resultsDiv.style.display = 'block';
-    
-    // Scroll to results
-    resultsDiv.scrollIntoView({ behavior: 'smooth' });
-}
-
 function displayResults(data) {
     const resultsDiv = document.getElementById('results');
     
     resultsDiv.innerHTML = `
         <div class="card result-card">
             <div class="card-header bg-${data.color_code}">
-                <h5 class="mb-0 text-white"><i class="fas fa-chart-bar me-2"></i>Calculation Results - LMTD Method</h5>
+                <h5 class="mb-0 text-white"><i class="fas fa-chart-bar me-2"></i>Calculation Results - Correct Engineering Method</h5>
             </div>
             <div class="card-body">
                 <div class="row">
@@ -448,11 +374,11 @@ function displayResults(data) {
                     </div>
                     <div class="col-md-6">
                         <div class="calculation-section">
-                            <h6 class="text-info">Performance Metrics</h6>
+                            <h6 class="text-info">Actual Operating Conditions</h6>
                             <p class="result-value"><strong>Actual U Value:</strong> ${data.u_actual.toFixed(2)} W/m²·K</p>
                             <p class="result-value"><strong>Clean U Value:</strong> ${data.u_clean.toFixed(2)} W/m²·K</p>
                             <p class="result-value"><strong>Heat Duty:</strong> ${(data.heat_duty / 1000).toFixed(2)} kW</p>
-                            <p class="result-value"><strong>LMTD:</strong> ${data.lmtd.toFixed(2)} °C</p>
+                            <p class="result-value"><strong>LMTD (Actual):</strong> ${data.lmtd_actual.toFixed(2)} °C</p>
                         </div>
                     </div>
                 </div>
@@ -464,7 +390,7 @@ function displayResults(data) {
                 </div>
                 <div class="row mt-3">
                     <div class="col-md-6">
-                        <small class="text-muted"><strong>Calculation Method:</strong> LMTD (Log Mean Temperature Difference)</small>
+                        <small class="text-muted"><strong>Method:</strong> Actual vs Clean Condition Comparison</small>
                     </div>
                     <div class="col-md-6 text-end">
                         <small class="text-muted">Calculated: ${data.calculated_at}</small>
@@ -481,29 +407,8 @@ function displayResults(data) {
 
 // Add input validation
 document.addEventListener('DOMContentLoaded', function() {
-    // Validate temperature inputs
-    const tempInputs = ['hot_inlet_temp', 'hot_outlet_temp', 'cold_inlet_temp', 'cold_outlet_temp'];
-    tempInputs.forEach(id => {
-        document.getElementById(id).addEventListener('change', function() {
-            const value = parseFloat(this.value);
-            if (value < -50 || value > 500) {
-                alert('Temperature values should be between -50°C and 500°C');
-                this.focus();
-            }
-        });
-    });
-    
-    // Validate flow rates
-    const flowInputs = ['hot_flow_rate', 'cold_flow_rate'];
-    flowInputs.forEach(id => {
-        document.getElementById(id).addEventListener('change', function() {
-            const value = parseFloat(this.value);
-            if (value <= 0 || value > 1000) {
-                alert('Flow rate must be between 0.01 and 1000 kg/s');
-                this.focus();
-            }
-        });
-    });
+    // Set U_clean to accept decimal values
+    document.getElementById('u_clean').step = '0.01';
 });
 </script>
 {% endblock %}
