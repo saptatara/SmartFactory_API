@@ -52,6 +52,15 @@
         border-radius: 0.5rem;
         margin: 1rem 0;
     }
+    
+    .flow-type-info {
+        background: rgba(16, 185, 129, 0.1);
+        border-left: 4px solid #10b981;
+        padding: 0.75rem;
+        border-radius: 0.5rem;
+        margin: 0.5rem 0;
+        font-size: 0.9rem;
+    }
 </style>
 {% endblock %}
 
@@ -75,10 +84,28 @@
                 </div>
                 
                 <form id="foulingForm">
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Flow Type Configuration</label>
+                                <select class="form-select" id="flow_type" required>
+                                    <option value="parallel" selected>Parallel Flow</option>
+                                    <option value="counter">Counter Flow</option>
+                                </select>
+                                <small class="text-muted">Select heat exchanger flow configuration</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div id="flowTypeInfo" class="flow-type-info">
+                                <strong>Parallel Flow Condition:</strong> T2_out (Cold outlet) < T1_out (Hot outlet)
+                            </div>
+                        </div>
+                    </div>
+                    
                     <div class="row">
                         <div class="col-md-6">
                             <div class="calculation-section">
-                                <h6 class="text-warning">🔥 Actual Operating Conditions</h6>
+                                <h6 class="text-warning">🔥 Hot Fluid Conditions</h6>
                                 <div class="mb-3">
                                     <label class="form-label">Hot Flow Rate (kg/s)</label>
                                     <input type="number" class="form-control" id="hot_flow_rate" step="0.01" value="10" required>
@@ -97,7 +124,7 @@
                         
                         <div class="col-md-6">
                             <div class="calculation-section">
-                                <h6 class="text-info">❄️ Actual Operating Conditions</h6>
+                                <h6 class="text-info">❄️ Cold Fluid Conditions</h6>
                                 <div class="mb-3">
                                     <label class="form-label">Cold Flow Rate (kg/s)</label>
                                     <input type="number" class="form-control" id="cold_flow_rate" step="0.01" value="12" required>
@@ -157,7 +184,7 @@
                         <div class="col-md-6">
                             <p class="result-value">Actual Conditions:</p>
                             <p>Q_actual = m × Cp × ΔT_actual</p>
-                            <p>LMTD_actual = f(T1_in, T1_out, T2_in, T2_out)</p>
+                            <p>LMTD_actual = f(T1_in, T1_out, T2_in, T2_out, flow_type)</p>
                             <p>U_actual = Q_actual / (A × LMTD_actual)</p>
                         </div>
                         <div class="col-md-6">
@@ -168,6 +195,20 @@
                             <p>η = U_actual / U_clean × 100%</p>
                         </div>
                     </div>
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <p class="result-value">Parallel Flow:</p>
+                            <p>ΔT1 = T1_in - T2_in</p>
+                            <p>ΔT2 = T1_out - T2_out</p>
+                            <p>Condition: T2_out < T1_out</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p class="result-value">Counter Flow:</p>
+                            <p>ΔT1 = T1_in - T2_out</p>
+                            <p>ΔT2 = T1_out - T2_in</p>
+                            <p>Condition: T2_in < T1_out</p>
+                        </div>
+                    </div>
                     <p class="small text-muted mb-0 mt-2">This method compares ACTUAL operating conditions against DESIGN/clean conditions to calculate the true fouling factor.</p>
                 </div>
             </div>
@@ -176,32 +217,73 @@
 </div>
 
 <script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Set U_clean to accept decimal values
+    document.getElementById('u_clean').step = '0.01';
+    
+    // Add event listener for flow type change
+    document.getElementById('flow_type').addEventListener('change', function() {
+        updateFlowTypeInfo();
+    });
+    
+    // Initialize flow type info
+    updateFlowTypeInfo();
+});
+
 document.getElementById('foulingForm').addEventListener('submit', function(e) {
     e.preventDefault();
     calculateFouling();
 });
 
-// PARALLEL FLOW LMTD Calculation Function
-function calculateParallelLMTD(T1_in, T1_out, T2_in, T2_out) {
-    // For parallel flow: ΔT1 = T1_in - T2_in, ΔT2 = T1_out - T2_out
-    const deltaT1 = T1_in - T2_in;
-    const deltaT2 = T1_out - T2_out;
+function updateFlowTypeInfo() {
+    const flowType = document.getElementById('flow_type').value;
+    const infoDiv = document.getElementById('flowTypeInfo');
     
+    if (flowType === 'parallel') {
+        infoDiv.innerHTML = '<strong>Parallel Flow Condition:</strong> T2_out (Cold outlet) < T1_out (Hot outlet)';
+        infoDiv.style.borderLeftColor = '#10b981';
+    } else {
+        infoDiv.innerHTML = '<strong>Counter Flow Condition:</strong> T2_in (Cold inlet) < T1_out (Hot outlet)';
+        infoDiv.style.borderLeftColor = '#3b82f6';
+    }
+}
+
+// LMTD Calculation Function for both flow types
+function calculateLMTD(T1_in, T1_out, T2_in, T2_out, flowType) {
+    let deltaT1, deltaT2;
+    
+    if (flowType === 'parallel') {
+        // For parallel flow: ΔT1 = T1_in - T2_in, ΔT2 = T1_out - T2_out
+        deltaT1 = T1_in - T2_in;
+        deltaT2 = T1_out - T2_out;
+    } else {
+        // For counter flow: ΔT1 = T1_in - T2_out, ΔT2 = T1_out - T2_in
+        deltaT1 = T1_in - T2_out;
+        deltaT2 = T1_out - T2_in;
+    }
+    
+    console.log(`LMTD calculation (${flowType}): ΔT1=${deltaT1}, ΔT2=${deltaT2}`);
+    
+    // Check for valid temperature differences
     if (deltaT1 <= 0 || deltaT2 <= 0) {
+        console.warn('Invalid temperature differences for LMTD calculation');
         return 0;
     }
     
+    // If temperature differences are equal
     if (Math.abs(deltaT1 - deltaT2) < 0.001) {
         return deltaT1;
     }
     
+    // Calculate LMTD
     return (deltaT1 - deltaT2) / Math.log(deltaT1 / deltaT2);
 }
 
 function calculateFouling() {
-    console.log("Starting CORRECT fouling calculation...");
+    console.log("Starting fouling calculation...");
     
     // Get all input values
+    const flow_type = document.getElementById('flow_type').value;
     const hot_flow_rate = parseFloat(document.getElementById('hot_flow_rate').value);
     const cold_flow_rate = parseFloat(document.getElementById('cold_flow_rate').value);
     const hot_inlet_temp = parseFloat(document.getElementById('hot_inlet_temp').value);
@@ -212,7 +294,7 @@ function calculateFouling() {
     const u_clean = parseFloat(document.getElementById('u_clean').value);
 
     console.log("Input values:", {
-        hot_flow_rate, cold_flow_rate, hot_inlet_temp, hot_outlet_temp, 
+        flow_type, hot_flow_rate, cold_flow_rate, hot_inlet_temp, hot_outlet_temp, 
         cold_inlet_temp, cold_outlet_temp, heat_transfer_area, u_clean
     });
 
@@ -229,16 +311,35 @@ function calculateFouling() {
         }
     }
 
-    // Validate temperatures for parallel flow
-    if (hot_inlet_temp <= cold_inlet_temp) {
-        alert('For parallel flow: T1_in must be greater than T2_in');
+    // Validate temperatures based on flow type
+    if (flow_type === 'parallel') {
+        // Parallel flow validation
+        if (hot_outlet_temp <= cold_outlet_temp) {
+            alert('For PARALLEL flow: T1_out (Hot outlet) must be greater than T2_out (Cold outlet)\n\n' +
+                  `Current values: T1_out = ${hot_outlet_temp}°C, T2_out = ${cold_outlet_temp}°C`);
+            document.getElementById('hot_outlet_temp').focus();
+            return;
+        }
+    } else {
+        // Counter flow validation
+        if (hot_outlet_temp <= cold_inlet_temp) {
+            alert('For COUNTER flow: T1_out (Hot outlet) must be greater than T2_in (Cold inlet)\n\n' +
+                  `Current values: T1_out = ${hot_outlet_temp}°C, T2_in = ${cold_inlet_temp}°C`);
+            document.getElementById('hot_outlet_temp').focus();
+            return;
+        }
+    }
+
+    // Additional basic validations
+    if (hot_inlet_temp <= hot_outlet_temp) {
+        alert('Hot inlet temperature must be greater than hot outlet temperature');
         document.getElementById('hot_inlet_temp').focus();
         return;
     }
     
-    if (hot_outlet_temp <= cold_outlet_temp) {
-        alert('For parallel flow: T1_out must be greater than T2_out');
-        document.getElementById('hot_outlet_temp').focus();
+    if (cold_outlet_temp <= cold_inlet_temp) {
+        alert('Cold outlet temperature must be greater than cold inlet temperature');
+        document.getElementById('cold_outlet_temp').focus();
         return;
     }
 
@@ -256,10 +357,14 @@ function calculateFouling() {
     const heat_duty_cold = cold_flow_rate * Cp * (cold_outlet_temp - cold_inlet_temp);
     const heat_duty_actual = (heat_duty_hot + heat_duty_cold) / 2;
     
-    // Calculate actual LMTD from measured temperatures
-    const lmtd_actual = calculateParallelLMTD(hot_inlet_temp, hot_outlet_temp, cold_inlet_temp, cold_outlet_temp);
+    // Calculate actual LMTD based on flow type
+    const lmtd_actual = calculateLMTD(
+        hot_inlet_temp, hot_outlet_temp, 
+        cold_inlet_temp, cold_outlet_temp, 
+        flow_type
+    );
     
-    console.log("Actual conditions:", { heat_duty_actual, lmtd_actual });
+    console.log("Actual conditions:", { heat_duty_actual, lmtd_actual, flow_type });
     
     if (lmtd_actual <= 0) {
         alert('Invalid temperature values for LMTD calculation. Please check temperature inputs.');
@@ -324,6 +429,7 @@ function calculateFouling() {
     }
 
     console.log("Final results:", {
+        flow_type,
         fouling_factor: valid_fouling_factor,
         u_actual,
         u_clean,
@@ -335,6 +441,7 @@ function calculateFouling() {
 
     // Display results
     displayResults({
+        flow_type: flow_type,
         fouling_factor: valid_fouling_factor,
         u_actual: u_actual,
         u_clean: u_clean,
@@ -351,17 +458,21 @@ function calculateFouling() {
 
 function displayResults(data) {
     const resultsDiv = document.getElementById('results');
+    const flowTypeLabel = data.flow_type === 'parallel' ? 'Parallel Flow' : 'Counter Flow';
     
     resultsDiv.innerHTML = `
         <div class="card result-card">
             <div class="card-header bg-${data.color_code}">
-                <h5 class="mb-0 text-white"><i class="fas fa-chart-bar me-2"></i>Calculation Results - Correct Engineering Method</h5>
+                <h5 class="mb-0 text-white"><i class="fas fa-chart-bar me-2"></i>Calculation Results - ${flowTypeLabel}</h5>
             </div>
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-6">
                         <div class="calculation-section">
                             <h6 class="text-primary">Fouling Analysis</h6>
+                            <p class="result-value"><strong>Flow Type:</strong> 
+                                <span class="badge bg-info">${flowTypeLabel}</span>
+                            </p>
                             <p class="result-value"><strong>Fouling Factor:</strong> 
                                 <span class="badge bg-${data.color_code}">${data.fouling_factor.toExponential(4)} m²·K/W</span>
                             </p>
@@ -404,11 +515,5 @@ function displayResults(data) {
     // Scroll to results
     resultsDiv.scrollIntoView({ behavior: 'smooth' });
 }
-
-// Add input validation
-document.addEventListener('DOMContentLoaded', function() {
-    // Set U_clean to accept decimal values
-    document.getElementById('u_clean').step = '0.01';
-});
 </script>
 {% endblock %}
