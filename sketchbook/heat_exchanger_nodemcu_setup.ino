@@ -5,16 +5,16 @@
 #include <SPI.h>
 
 // WiFi credentials
-const char* ssid = "Airtel_9309924679_5G";
-const char* password = "archsam801";
+//const char* ssid = "Airtel_9309924679_5G";
+//const char* password = "archsam801";
 
-//const char* ssid = "zerolosssystems";
-//const char* password = "123456789";
+const char* ssid = "zerolosssystems";
+const char* password = "123456789";
 
 // Django API details
-const char* host = "150.241.245.67";  // Your server IP
+const char* host = "103.150.136.203";  // Your server IP
 const int port = 8000;                 // Django server port
-String writeApiKey = "b97fa24b-5ee1-4761-a24f-9b6d78346e60";  // Platex device write key
+String writeApiKey = "dce5fdfb-308e-473c-85d5-012526b03784";  // Platex device write key
 String deviceId = "2";                 // Platex device ID
 
 // DS18B20 Sensor Setup
@@ -36,22 +36,41 @@ DallasTemperature sensors(&oneWire);
 #define ADS1220_CMD_RREG    0x20
 #define ADS1220_CMD_WREG    0x40
 
-// DPT Configuration for ONE sensor with 120Ω resistor
-float shuntResistance = 120.0; // Changed from 125Ω to 120Ω
+// ADS1220 Configuration Register Addresses
+#define CONFIG_REG0  0x00
+#define CONFIG_REG1  0x01
+#define CONFIG_REG2  0x02
+#define CONFIG_REG3  0x03
+
+// DPT Configuration
+float shuntResistance = 250.0; // 250Ω as per your wiring diagram
 float pressureMin = 0.0; // Bar
 float pressureMax = 10.0; // Bar
 
-// New voltage ranges with 120Ω:
-// 4mA = 0.004A × 120Ω = 0.48V
-// 20mA = 0.020A × 120Ω = 2.40V
-float voltageAt4mA = 0.48;  // 4mA × 120Ω
-float voltageAt20mA = 2.40; // 20mA × 120Ω
+// New voltage ranges with 250Ω:
+// 4mA = 0.004A × 250Ω = 1.00V
+// 20mA = 0.020A × 250Ω = 5.00V
+float voltageAt4mA = 1.00;  // 4mA × 250Ω
+float voltageAt20mA = 5.00; // 20mA × 250Ω
 
-// DPT calibration values
-int32_t dptAdcMin = 0;  // ADC value at 4mA
-int32_t dptAdcMax = 0;  // ADC value at 20mA
+// ========== UPDATED TDS CONFIGURATION ==========
+float tdsVoltageAt0ppm = 0.0;       // Voltage at 0 ppm (pure water)
+float tdsVoltageAt1000ppm = 2.048;  // Voltage at 1000 ppm (MAXIMUM based on 2.048V reference)
+float tdsMin = 0.0;                 // Minimum TDS value in ppm
+float tdsMax = 1000.0;              // Maximum TDS value in ppm
+float tdsTemperatureCoefficient = 0.02; // 2% per °C for temperature compensation
+
+// ADS1220 Channels
+enum ADS1220_CHANNELS {
+  CH_DPT = 0,    // AIN0-AIN1 differential (DPT sensor)
+  CH_TDS = 1     // AIN2-AIN3 differential (TDS sensor)
+};
+
+// Sensor variables
 bool dptConnected = false;
+bool tdsConnected = false;
 String dptLabel = "DPT1";
+String tdsLabel = "TDS1";
 
 // Temperature sensor variables
 int numberOfTempSensors;
@@ -69,16 +88,23 @@ const unsigned long WIFI_CHECK_INTERVAL = 10000; // Check WiFi every 10 seconds
 
 // Function prototypes
 void testDjangoConnection();
-void sendToDjangoAPI(float t1, float t2, float t3, float t4, float pressure);
+void sendToDjangoAPI(float t1, float t2, float t3, float t4, float pressure, float tdsValue);
 void initializeADS1220();
+void selectADS1220Channel(uint8_t channel);
 void detectDPTSensor();
+void detectTDSSensor();
 float readDPTSensor();
+float readTDSSensor(float temperature = 25.0);
+String getTDSQuality(float tdsValue);
 int32_t readADS1220();
 void writeRegister(uint8_t reg, uint8_t value);
-void printAllReadings(float t1, float t2, float t3, float t4, float pressure);
+uint8_t readRegister(uint8_t reg);
+void printAllReadings(float t1, float t2, float t3, float t4, float pressure, float tdsValue);
 bool connectToWiFi();
 void checkWiFiConnection();
 void monitorConnection();
+void calibrateTDSSensor();
+void testTDSSensorWithSolutions();
 
 void setup() {
   Serial.begin(115200);
@@ -132,9 +158,16 @@ void setup() {
     }
   }
 
-  // Initialize ADS1220 and detect DPT sensor
+  // Initialize ADS1220
   initializeADS1220();
+  
+  // Detect sensors
   detectDPTSensor();
+  detectTDSSensor();
+
+  // OPTIONAL: Run TDS calibration if needed
+  // Uncomment this line to calibrate TDS sensor
+  // calibrateTDSSensor();
 
   // Connect to WiFi with enhanced handling
   connectToWiFi();
@@ -267,13 +300,27 @@ void loop() {
     float t2 = tempSensorConnected[1] ? sensors.getTempCByIndex(1) : -999.0;
     float t3 = tempSensorConnected[2] ? sensors.getTempCByIndex(2) : -999.0;
     float t4 = tempSensorConnected[3] ? sensors.getTempCByIndex(3) : -999.0;
+    
+    // Read DPT sensor
     float pressure = readDPTSensor();
     
+    // Read TDS sensor with temperature compensation
+    // Using T1Out (t2) as water temperature for compensation
+    float waterTemperature = 25.0; // Default value
+    if (tempSensorConnected[1] && t2 > -900.0 && t2 <= 100.0) { // Check if T1Out is connected and valid
+      waterTemperature = t2;
+      Serial.println("🌡️ Using T1Out temperature for TDS compensation: " + String(waterTemperature, 1) + "°C");
+    } else {
+      Serial.println("🌡️ Using default temperature (25°C) for TDS compensation");
+    }
+    
+    float tdsValue = readTDSSensor(waterTemperature);
+    
     // Print readings
-    printAllReadings(t1, t2, t3, t4, pressure);
+    printAllReadings(t1, t2, t3, t4, pressure, tdsValue);
     
     // Send to API
-    sendToDjangoAPI(t1, t2, t3, t4, pressure);
+    sendToDjangoAPI(t1, t2, t3, t4, pressure, tdsValue);
     
     lastDataSend = currentTime;
     Serial.println("⏰ Next send in 60 seconds...");
@@ -288,22 +335,53 @@ void initializeADS1220() {
   SPI.transfer(ADS1220_CMD_RESET); // Reset ADS1220
   delay(10);
   
-  // Configure ADS1220 for AIN0-AIN1 differential input
+  // Configure default channel (DPT sensor: AIN0-AIN1 differential)
   // Register 0: AIN0-AIN1, PGA bypass, Gain=1
-  writeRegister(0, 0x00); 
+  writeRegister(CONFIG_REG0, 0x00); 
   // Register 1: DR=20 SPS, Normal mode, Continuous conversion
-  writeRegister(1, 0x04);
-  // Register 2: Internal reference, 50/60Hz rejection, Pulse conversion
-  writeRegister(2, 0x10);
+  writeRegister(CONFIG_REG1, 0x04);
+  // Register 2: Internal 2.048V reference, 50/60Hz rejection, Pulse conversion
+  writeRegister(CONFIG_REG2, 0x10);
+  // Register 3: Disable IDAC currents
+  writeRegister(CONFIG_REG3, 0x00);
   
   digitalWrite(ADS1220_CS_PIN, HIGH);
   delay(100);
 }
 
+void selectADS1220Channel(uint8_t channel) {
+  digitalWrite(ADS1220_CS_PIN, LOW);
+  
+  uint8_t muxConfig;
+  
+  if (channel == CH_DPT) {
+    // AIN0-AIN1 differential for DPT
+    muxConfig = 0x00; // AINP=AIN0, AINN=AIN1
+  } else if (channel == CH_TDS) {
+    // AIN2-AIN3 differential for TDS
+    muxConfig = 0x30; // AINP=AIN2, AINN=AIN3
+  } else {
+    muxConfig = 0x00; // Default to DPT
+  }
+  
+  // Read current config and update only MUX bits
+  uint8_t currentConfig = readRegister(CONFIG_REG0);
+  currentConfig = (currentConfig & 0x0F) | muxConfig; // Keep lower 4 bits, update upper 4 bits
+  
+  writeRegister(CONFIG_REG0, currentConfig);
+  
+  digitalWrite(ADS1220_CS_PIN, HIGH);
+  delay(10); // Small delay for configuration to take effect
+}
+
 void detectDPTSensor() {
   Serial.println("🔧 Detecting DPT sensor...");
-  Serial.println("📊 Using 120Ω shunt resistor");
-  Serial.println("⚡ Expected: 0.48V (4mA) to 2.40V (20mA)");
+  Serial.println("📊 Using 250Ω shunt resistor");
+  Serial.println("⚡ Expected: 1.00V (4mA) to 5.00V (20mA)");
+  
+  // Select DPT channel
+  selectADS1220Channel(CH_DPT);
+  delay(100);
   
   float pressure = readDPTSensor();
   
@@ -315,13 +393,49 @@ void detectDPTSensor() {
     dptConnected = false;
     Serial.println("❌ " + dptLabel + ": NOT DETECTED");
     Serial.println("🔧 Wiring Guide:");
-    Serial.println("   DPT Pin2 → 120Ω → GND");
-    Serial.println("   DPT Pin2 → 1kΩ → AIN0");
-    Serial.println("   GND side of 120Ω → AIN1");
+    Serial.println("   DPT Pin2 → 250Ω → GND");
+    Serial.println("   DPT Pin2 → AIN0");
+    Serial.println("   GND side of 250Ω → AIN1");
+  }
+}
+
+void detectTDSSensor() {
+  Serial.println("🔧 Detecting TDS sensor...");
+  Serial.println("📊 Specifications: 0-2.048V output (0-1000 ppm)");
+  Serial.println("⚡ Reference Voltage: 2.048V (ADS1220 internal)");
+  Serial.println("💡 Note: Using accurate linear conversion");
+  
+  // Select TDS channel
+  selectADS1220Channel(CH_TDS);
+  delay(100);
+  
+  float tdsValue = readTDSSensor(25.0);
+  
+  if (tdsValue >= 0.0 && tdsValue <= 1100.0) { // Reasonable TDS range (with margin)
+    tdsConnected = true;
+    Serial.println("✅ " + tdsLabel + ": CONNECTED");
+    Serial.println("📊 Current reading: " + String(tdsValue, 1) + " ppm");
+    Serial.println("📊 Water Quality: " + getTDSQuality(tdsValue));
+    Serial.println("⚠️  Note: Accuracy ±10% at 25°C");
+  } else if (tdsValue > -9900.0 && tdsValue < 0) {
+    tdsConnected = true; // Possibly negative voltage (ground offset)
+    Serial.println("⚠️ " + tdsLabel + ": DETECTED (possible ground offset)");
+    Serial.println("📊 Current reading: " + String(tdsValue, 1) + " ppm");
+  } else {
+    tdsConnected = false;
+    Serial.println("❌ " + tdsLabel + ": NOT DETECTED");
+    Serial.println("🔧 Wiring Guide:");
+    Serial.println("   TDS VOUT → AIN2 (ADS1220)");
+    Serial.println("   TDS GND → AIN3 (ADS1220)");
+    Serial.println("   TDS VCC → 3.3V (ESP32)");
   }
 }
 
 float readDPTSensor() {
+  // Select DPT channel
+  selectADS1220Channel(CH_DPT);
+  delay(50); // Allow channel switching
+  
   int32_t adcValue = readADS1220();
   
   if (adcValue == 0x7FFFFF || adcValue == 0x800000) {
@@ -331,12 +445,12 @@ float readDPTSensor() {
   // Convert ADC value to voltage (24-bit, 2.048V reference)
   float voltage = (adcValue / 8388607.0) * 2.048;
   
-  // Convert voltage to current using 120Ω
-  float current = voltage / shuntResistance;
-  
   // Debug information
-  Serial.print("📊 ADC: " + String(adcValue) + " | ");
+  Serial.print("📊 DPT ADC: " + String(adcValue) + " | ");
   Serial.print("⚡ Voltage: " + String(voltage, 4) + "V | ");
+  
+  // Calculate current through 250Ω shunt
+  float current = voltage / shuntResistance;
   Serial.print("🔌 Current: " + String(current * 1000, 1) + "mA | ");
   
   // Convert current to pressure (4-20mA = 0-10 bar)
@@ -344,19 +458,136 @@ float readDPTSensor() {
     // More accurate calculation using voltage ranges
     float pressure = ((voltage - voltageAt4mA) / (voltageAt20mA - voltageAt4mA)) * (pressureMax - pressureMin);
     
-    // Apply calibration if available
-    if (dptAdcMin != 0 && dptAdcMax != 0) {
-      float calibratedCurrent = ((adcValue - dptAdcMin) / (float)(dptAdcMax - dptAdcMin)) * (20.0 - 4.0) + 4.0;
-      pressure = ((calibratedCurrent - 4.0) / 16.0) * (pressureMax - pressureMin);
+    // Constrain to valid range
+    pressure = constrain(pressure, pressureMin, pressureMax);
+    
+    // Check if pressure is reasonable
+    if (pressure >= -1.0 && pressure <= 12.0) {
+      Serial.println("📏 Pressure: " + String(pressure, 2) + " bar");
+      return pressure;
+    }
+  }
+  
+  Serial.println("❌ INVALID READING");
+  return -9999.0; // Invalid reading
+}
+
+// ========== CORRECTED TDS READING FUNCTION ==========
+float readTDSSensor(float temperature) {
+  // Select TDS channel
+  selectADS1220Channel(CH_TDS);
+  delay(50); // Allow channel switching
+  
+  // Take multiple readings for better accuracy
+  int32_t adcValue = 0;
+  int validReadings = 0;
+  int maxAttempts = 5;
+  
+  for (int i = 0; i < maxAttempts; i++) {
+    int32_t reading = readADS1220();
+    
+    // Check if reading is valid (not max/min value)
+    if (reading != 0x7FFFFF && reading != 0x800000 && reading != 0) {
+      adcValue += abs(reading); // Use absolute value
+      validReadings++;
+    }
+    delay(10);
+  }
+  
+  if (validReadings == 0) {
+    Serial.println("❌ TDS: No valid ADC readings");
+    return -9999.0;
+  }
+  
+  // Calculate average ADC value
+  adcValue = adcValue / validReadings;
+  
+  // Convert ADC value to voltage (24-bit, 2.048V reference)
+  // Maximum ADC value for 2.048V is 8388607 (2^23 - 1)
+  float voltage = (adcValue / 8388607.0) * 2.048;
+  
+  // Debug information
+  Serial.print("📊 TDS ADC: " + String(adcValue) + " | ");
+  Serial.print("⚡ Voltage: " + String(voltage, 4) + "V | ");
+  
+  // Check if voltage is within reasonable range (0-2.048V)
+  if (voltage >= 0.0 && voltage <= 2.048) {
+    
+    // SIMPLE LINEAR CALCULATION:
+    // voltage = 0V → 0 ppm
+    // voltage = 2.048V → 1000 ppm
+    float tdsValue = (voltage / 2.048) * 1000.0;
+    
+    // Debug the calculation
+    Serial.print("📈 Raw TDS: " + String(tdsValue, 1) + " ppm | ");
+    
+    // Apply temperature compensation if temperature is valid
+    if (temperature >= 0.0 && temperature <= 100.0) {
+      // Standard compensation: 2% per °C from reference temperature (25°C)
+      // TDS readings increase with temperature
+      float compensationFactor = 1.0 + tdsTemperatureCoefficient * (25.0 - temperature);
+      tdsValue = tdsValue * compensationFactor;
+      
+      Serial.print("🌡️ Compensated @ " + String(temperature, 1) + "°C: ");
     }
     
-    pressure = constrain(pressure, pressureMin, pressureMax);
-    Serial.println("📏 Pressure: " + String(pressure, 2) + " bar");
-    return pressure;
-  } else {
-    Serial.println("❌ INVALID CURRENT");
-    return -9999.0; // Invalid current reading
+    // Constrain to reasonable range (0-1100 ppm to allow for slight over-range)
+    tdsValue = constrain(tdsValue, 0.0, 1100.0);
+    
+    // Add sensor-specific corrections (if known)
+    // These values can be adjusted based on your specific sensor
+    if (tdsValue < 50) {
+      // For very low TDS, reduce noise
+      tdsValue = round(tdsValue / 5.0) * 5.0;
+    }
+    
+    Serial.println("💧 Final TDS: " + String(tdsValue, 1) + " ppm");
+    
+    // Quality warning
+    if (tdsValue > 900) {
+      Serial.println("⚠️  Warning: TDS reading very high (>900 ppm)");
+    } else if (tdsValue < 10) {
+      Serial.println("💧 Very pure water detected (<10 ppm)");
+    }
+    
+    return tdsValue;
   }
+  else if (voltage < 0.0 && voltage > -0.1) {
+    // Slight negative offset (common in differential measurements)
+    Serial.print("⚠️  Small negative offset detected (");
+    Serial.print(voltage, 4);
+    Serial.println("V), setting to 0V");
+    
+    // Treat as 0V = 0 ppm
+    Serial.println("💧 TDS: 0.0 ppm (treated as pure water)");
+    return 0.0;
+  }
+  else if (voltage > 2.048 && voltage < 2.5) {
+    // Voltage slightly above reference
+    Serial.print("⚠️  Voltage exceeds 2.048V reference (");
+    Serial.print(voltage, 3);
+    Serial.println("V)");
+    
+    // Conservative extrapolation using sensor max of 2.3V
+    float tdsValue = (voltage / 2.3) * 1000.0;
+    tdsValue = constrain(tdsValue, 0.0, 1200.0);
+    
+    Serial.println("💧 Extrapolated TDS: " + String(tdsValue, 1) + " ppm (reduced accuracy)");
+    return tdsValue;
+  }
+  else {
+    Serial.println("❌ INVALID: Voltage out of range (0-2.048V expected, got " + String(voltage, 3) + "V)");
+    return -9999.0;
+  }
+}
+
+String getTDSQuality(float tdsValue) {
+  if (tdsValue < 50) return "Excellent (Pure)";
+  else if (tdsValue < 150) return "Good";
+  else if (tdsValue < 250) return "Fair";
+  else if (tdsValue < 350) return "Poor";
+  else if (tdsValue < 500) return "Very Poor";
+  else return "Unacceptable";
 }
 
 int32_t readADS1220() {
@@ -364,11 +595,19 @@ int32_t readADS1220() {
   
   // Start conversion
   SPI.transfer(ADS1220_CMD_START);
-  delay(100); // Wait for conversion (adjust based on data rate)
+  
+  // Wait for DRDY pin if connected, otherwise delay
+  if (ADS1220_DRDY_PIN != -1) {
+    while (digitalRead(ADS1220_DRDY_PIN) == HIGH) {
+      delayMicroseconds(10);
+    }
+  } else {
+    delay(100); // Wait for conversion (20 SPS = 50ms per conversion)
+  }
   
   // Read conversion result
   SPI.transfer(ADS1220_CMD_RDATA);
-  delay(1);
+  delayMicroseconds(10);
   
   uint8_t b1 = SPI.transfer(0xFF);
   uint8_t b2 = SPI.transfer(0xFF);
@@ -393,8 +632,17 @@ void writeRegister(uint8_t reg, uint8_t value) {
   digitalWrite(ADS1220_CS_PIN, HIGH);
 }
 
-void printAllReadings(float t1, float t2, float t3, float t4, float pressure) {
+uint8_t readRegister(uint8_t reg) {
+  digitalWrite(ADS1220_CS_PIN, LOW);
+  SPI.transfer(ADS1220_CMD_RREG | (reg << 2));
+  uint8_t value = SPI.transfer(0xFF);
+  digitalWrite(ADS1220_CS_PIN, HIGH);
+  return value;
+}
+
+void printAllReadings(float t1, float t2, float t3, float t4, float pressure, float tdsValue) {
   Serial.println("📊 === SENSOR READINGS ===");
+  Serial.println("⏰ Timestamp: " + String(millis() / 1000) + " seconds");
   
   // Temperature readings
   Serial.println("🌡️ Temperature Sensors:");
@@ -415,10 +663,22 @@ void printAllReadings(float t1, float t2, float t3, float t4, float pressure) {
   } else {
     Serial.println("❌ NOT DETECTED");
   }
+  
+  // TDS reading
+  Serial.println("💧 TDS Sensor:");
+  Serial.print("  " + tdsLabel + ": ");
+  if (tdsConnected && tdsValue > -9990.0) {
+    Serial.print(String(tdsValue, 1) + " ppm");
+    Serial.print(" (" + getTDSQuality(tdsValue) + ")");
+    Serial.println();
+  } else {
+    Serial.println("❌ NOT DETECTED");
+  }
+  
   Serial.println("📊 ======================");
 }
 
-void sendToDjangoAPI(float t1, float t2, float t3, float t4, float pressure) {
+void sendToDjangoAPI(float t1, float t2, float t3, float t4, float pressure, float tdsValue) {
   if (!wifiConnected) return;
   
   Serial.println("🔌 === SENDING DATA TO DJANGO ===");
@@ -446,7 +706,8 @@ void sendToDjangoAPI(float t1, float t2, float t3, float t4, float pressure) {
   jsonData += "\"t1_out\":" + String(t2,2) + ",";
   jsonData += "\"t2_in\":" + String(t3,2) + ",";
   jsonData += "\"t2_out\":" + String(t4,2) + ",";
-  jsonData += "\"dpt1\":" + (dptConnected && pressure > -9990.0 ? String(pressure,2) : "null");
+  jsonData += "\"dpt1\":" + (dptConnected && pressure > -9990.0 ? String(pressure,2) : "null") + ",";
+  jsonData += "\"tds1\":" + (tdsConnected && tdsValue > -9990.0 ? String(tdsValue,1) : "null");
   jsonData += "}";
   
   // CORRECT: Use ONLY the API key without "Token" prefix
@@ -508,5 +769,125 @@ void sendToDjangoAPI(float t1, float t2, float t3, float t4, float pressure) {
   
   client.stop();
   Serial.println("🔌 Connection closed");
+  Serial.println("=================================");
+}
+
+// ========== TDS CALIBRATION FUNCTION ==========
+void calibrateTDSSensor() {
+  Serial.println("🔧 === TDS SENSOR CALIBRATION ===");
+  Serial.println("NOTE: This will calibrate for 0-1000 ppm range");
+  Serial.println("1. Clean sensor with distilled water");
+  Serial.println("2. Place sensor in DISTILLED WATER (0 ppm)");
+  Serial.println("3. Wait 30 seconds for stabilization");
+  Serial.println("4. Press any key to continue...");
+  
+  while (!Serial.available()) {
+    delay(100);
+  }
+  Serial.read(); // Clear buffer
+  
+  // Read zero point
+  selectADS1220Channel(CH_TDS);
+  delay(2000); // Wait for stabilization
+  
+  long totalAdc = 0;
+  int samples = 10;
+  
+  Serial.print("🔬 Measuring zero point");
+  for (int i = 0; i < samples; i++) {
+    int32_t adcValue = readADS1220();
+    if (adcValue != 0x7FFFFF && adcValue != 0x800000) {
+      totalAdc += abs(adcValue);
+      Serial.print(".");
+    }
+    delay(500);
+  }
+  
+  float avgAdc = totalAdc / (float)samples;
+  tdsVoltageAt0ppm = (avgAdc / 8388607.0) * 2.048;
+  
+  Serial.println("\n✅ Zero point calibrated:");
+  Serial.println("   ADC: " + String(avgAdc));
+  Serial.println("   Voltage: " + String(tdsVoltageAt0ppm, 4) + "V");
+  
+  // Calibrate at known TDS value
+  Serial.println("\n5. Place sensor in 1000 ppm calibration solution");
+  Serial.println("6. Wait 60 seconds for stabilization");
+  Serial.println("7. Press any key to continue...");
+  
+  while (!Serial.available()) {
+    delay(100);
+  }
+  Serial.read(); // Clear buffer
+  
+  delay(3000); // Wait for stabilization
+  
+  totalAdc = 0;
+  Serial.print("🔬 Measuring 1000 ppm point");
+  for (int i = 0; i < samples; i++) {
+    int32_t adcValue = readADS1220();
+    if (adcValue != 0x7FFFFF && adcValue != 0x800000) {
+      totalAdc += abs(adcValue);
+      Serial.print(".");
+    }
+    delay(500);
+  }
+  
+  avgAdc = totalAdc / (float)samples;
+  tdsVoltageAt1000ppm = (avgAdc / 8388607.0) * 2.048;
+  
+  Serial.println("\n✅ 1000 ppm point calibrated:");
+  Serial.println("   ADC: " + String(avgAdc));
+  Serial.println("   Voltage: " + String(tdsVoltageAt1000ppm, 4) + "V");
+  
+  // Calculate actual range
+  float actualRange = tdsVoltageAt1000ppm - tdsVoltageAt0ppm;
+  Serial.println("📐 Actual sensor range: " + String(actualRange, 4) + "V");
+  
+  // Adjust max TDS if range is different
+  if (actualRange < 1.0) {
+    Serial.println("⚠️  Warning: Small voltage range detected");
+    Serial.println("   Consider using a different TDS range");
+  }
+  
+  Serial.println("✅ Calibration complete!");
+  Serial.println("   Use these values in your code:");
+  Serial.println("   tdsVoltageAt0ppm = " + String(tdsVoltageAt0ppm, 4) + ";");
+  Serial.println("   tdsVoltageAt1000ppm = " + String(tdsVoltageAt1000ppm, 4) + ";");
+  Serial.println("=================================");
+}
+
+// ========== TDS SENSOR TEST ==========
+void testTDSSensorWithSolutions() {
+  Serial.println("🧪 === TDS SENSOR TEST ===");
+  Serial.println("Testing with different water samples:");
+  
+  // Test with different solutions (simulated or real)
+  float testTemperatures[] = {20.0, 25.0, 30.0, 35.0};
+  int numTests = sizeof(testTemperatures) / sizeof(testTemperatures[0]);
+  
+  for (int i = 0; i < numTests; i++) {
+    Serial.println("\n🌡️ Test at " + String(testTemperatures[i], 1) + "°C:");
+    
+    // Simulate different water qualities
+    // These are example voltages - actual values depend on your sensor
+    float testVoltages[] = {0.1, 0.5, 1.0, 1.5, 2.0};
+    
+    for (int j = 0; j < 5; j++) {
+      float voltage = testVoltages[j];
+      float tdsValue = (voltage / 2.048) * 1000.0;
+      
+      // Apply temperature compensation
+      float compensationFactor = 1.0 + tdsTemperatureCoefficient * (25.0 - testTemperatures[i]);
+      tdsValue = tdsValue * compensationFactor;
+      
+      Serial.print("  " + String(voltage, 2) + "V → ");
+      Serial.print(String(tdsValue, 0) + " ppm (");
+      Serial.print(getTDSQuality(tdsValue));
+      Serial.println(")");
+    }
+  }
+  
+  Serial.println("✅ Test complete!");
   Serial.println("=================================");
 }
