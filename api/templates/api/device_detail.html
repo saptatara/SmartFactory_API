@@ -57,6 +57,34 @@
     </div>
 </div>
 
+<!-- Quick Stats Row -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card bg-dark border-light">
+            <div class="card-body py-3">
+                <div class="row text-center">
+                    {% for sensor_label, sensor_info in sensor_stats.items %}
+                    <div class="col-md-2">
+                        <h6 class="text-muted mb-1">{{ sensor_label|upper }}</h6>
+                        <h4 class="
+                            {% if 't1_in' in sensor_label or 't2_in' in sensor_label %}text-info
+                            {% elif 't1_out' in sensor_label or 't2_out' in sensor_label %}text-primary
+                            {% elif 'dpt' in sensor_label %}text-warning
+                            {% elif 'tds' in sensor_label %}text-success
+                            {% else %}text-light{% endif %}
+                        ">
+                            {{ sensor_info.current|default:"--" }}
+                            <small class="text-muted">{{ sensor_info.unit }}</small>
+                        </h4>
+                        <small class="text-muted">{{ sensor_info.readings_count }} readings</small>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="row g-4">
     <!-- Device Information Sidebar -->
     <div class="col-12 col-lg-4">
@@ -94,6 +122,22 @@
                 <div class="mb-3">
                     <strong class="text-light d-block mb-1">Created</strong>
                     <span class="text-white">{{ device.created_at|date:"M d, Y" }}</span>
+                </div>
+
+                <!-- Sensor List -->
+                <div class="mb-3">
+                    <strong class="text-light d-block mb-2">Sensors</strong>
+                    <div class="d-flex flex-wrap gap-1">
+                        {% for config in device.sensor_configs.all %}
+                            <span class="badge 
+                                {% if config.sensor_type.name == 'Temperature' %}bg-info
+                                {% elif config.sensor_type.name == 'Pressure' %}bg-warning
+                                {% elif config.sensor_type.name == 'TDS' %}bg-success
+                                {% else %}bg-secondary{% endif %}">
+                                {{ config.sensor_label }}
+                            </span>
+                        {% endfor %}
+                    </div>
                 </div>
 
                 <hr class="my-3 border-light">
@@ -149,6 +193,60 @@
         </div>
     </div>
 </div>
+
+<!-- TDS Quality Legend (only if TDS data exists) -->
+{% if 'tds1' in sensor_data_json %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card bg-dark border-success">
+            <div class="card-header bg-success text-white">
+                <i class="fas fa-tint me-2"></i>TDS Water Quality Guide
+            </div>
+            <div class="card-body py-3">
+                <div class="row text-center">
+                    <div class="col-md-2">
+                        <div class="p-2 rounded" style="background: rgba(34, 197, 94, 0.2); border: 1px solid #22c55e;">
+                            <small class="d-block text-success fw-bold">0-50 ppm</small>
+                            <small class="text-light">Excellent</small>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="p-2 rounded" style="background: rgba(34, 197, 94, 0.1); border: 1px solid #4ade80;">
+                            <small class="d-block text-success">51-150 ppm</small>
+                            <small class="text-light">Good</small>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="p-2 rounded" style="background: rgba(251, 191, 36, 0.1); border: 1px solid #fbbf24;">
+                            <small class="d-block text-warning">151-250 ppm</small>
+                            <small class="text-light">Fair</small>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="p-2 rounded" style="background: rgba(251, 113, 133, 0.1); border: 1px solid #fb7185;">
+                            <small class="d-block text-danger">251-350 ppm</small>
+                            <small class="text-light">Poor</small>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="p-2 rounded" style="background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444;">
+                            <small class="d-block text-danger">351-500 ppm</small>
+                            <small class="text-light">Very Poor</small>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="p-2 rounded" style="background: rgba(127, 29, 29, 0.2); border: 1px solid #7f1d1d;">
+                            <small class="d-block text-danger">500+ ppm</small>
+                            <small class="text-light">Unacceptable</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 {% endblock %}
 
 {% block extra_js %}
@@ -180,6 +278,25 @@ function formatChartTime(timestamp) {
     });
 }
 
+// Function to get TDS quality class
+function getTDSQualityClass(value) {
+    if (value <= 50) return 'text-success';
+    if (value <= 150) return 'text-info';
+    if (value <= 250) return 'text-warning';
+    if (value <= 350) return 'text-danger';
+    return 'text-danger fw-bold';
+}
+
+// Function to get TDS quality text
+function getTDSQualityText(value) {
+    if (value <= 50) return 'Excellent';
+    if (value <= 150) return 'Good';
+    if (value <= 250) return 'Fair';
+    if (value <= 350) return 'Poor';
+    if (value <= 500) return 'Very Poor';
+    return 'Unacceptable';
+}
+
 // Add loading states to buttons for better UX
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Loading sensor data with filters...');
@@ -209,6 +326,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const container = document.getElementById('charts-container');
     
     console.log('Sensor data loaded:', Object.keys(sensorData).length, 'sensors');
+    console.log('Sensors:', Object.keys(sensorData));
     
     if (!sensorData || Object.keys(sensorData).length === 0) {
         container.innerHTML = `
@@ -230,21 +348,84 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
     }
     
-    // Create chart containers
-    container.innerHTML = '';
-    const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
+    // Create chart containers - order by sensor type
+    const sensorOrder = ['t1_in', 't1_out', 't2_in', 't2_out', 'dpt1', 'tds1'];
+    const colors = {
+        't1_in': '#3b82f6',    // Blue
+        't1_out': '#06b6d4',   // Cyan
+        't2_in': '#8b5cf6',    // Purple
+        't2_out': '#d946ef',   // Pink
+        'dpt1': '#f59e0b',     // Yellow/Orange
+        'tds1': '#10b981'      // Green
+    };
     
-    Object.keys(sensorData).forEach((sensorLabel, index) => {
+    const sensorLabels = {
+        't1_in': 'T1 In (Hot In)',
+        't1_out': 'T1 Out (Hot Out)', 
+        't2_in': 'T2 In (Cold In)',
+        't2_out': 'T2 Out (Cold Out)',
+        'dpt1': 'Pressure (DPT)',
+        'tds1': 'TDS (Water Quality)'
+    };
+    
+    const sensorUnits = {
+        't1_in': '°C',
+        't1_out': '°C',
+        't2_in': '°C', 
+        't2_out': '°C',
+        'dpt1': 'bar',
+        'tds1': 'ppm'
+    };
+    
+    container.innerHTML = '';
+    
+    // Sort sensors in preferred order
+    const sortedSensors = Object.keys(sensorData).sort((a, b) => {
+        const indexA = sensorOrder.indexOf(a);
+        const indexB = sensorOrder.indexOf(b);
+        if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+        if (indexA !== -1) return -1;
+        if (indexB !== -1) return 1;
+        return a.localeCompare(b);
+    });
+    
+    sortedSensors.forEach((sensorLabel, index) => {
         const readings = sensorData[sensorLabel];
-        const color = colors[index % colors.length];
+        const color = colors[sensorLabel] || ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'][index % 6];
+        const displayLabel = sensorLabels[sensorLabel] || sensorLabel.toUpperCase();
+        const unit = sensorUnits[sensorLabel] || '';
+        const currentValue = readings[0]?.value;
         
         const colDiv = document.createElement('div');
         colDiv.className = 'col-12 col-md-6 mb-4';
+        
+        // Special handling for TDS sensor
+        const isTDS = sensorLabel === 'tds1';
+        let tdsQualityHTML = '';
+        
+        if (isTDS && currentValue) {
+            const qualityClass = getTDSQualityClass(currentValue);
+            const qualityText = getTDSQualityText(currentValue);
+            tdsQualityHTML = `
+                <div class="mt-2">
+                    <span class="badge ${qualityClass}" style="border: 1px solid ${color}">
+                        ${qualityText} Quality
+                    </span>
+                </div>
+            `;
+        }
+        
         colDiv.innerHTML = `
             <div class="card h-100 bg-dark border-light">
-                <div class="card-header d-flex justify-content-between align-items-center border-light">
-                    <h6 class="mb-0 text-white">${sensorLabel.toUpperCase()}</h6>
-                    <span class="badge" style="background-color: ${color}">${sensorLabel}</span>
+                <div class="card-header d-flex justify-content-between align-items-center border-light" style="border-left: 4px solid ${color}">
+                    <div>
+                        <h6 class="mb-0 text-white">
+                            <i class="fas ${isTDS ? 'fa-tint' : sensorLabel.includes('t') ? 'fa-thermometer-half' : 'fa-tachometer-alt'} me-2"></i>
+                            ${displayLabel}
+                        </h6>
+                        <small class="text-muted">${readings.length} readings</small>
+                    </div>
+                    <span class="badge" style="background-color: ${color}; color: white">${unit}</span>
                 </div>
                 <div class="card-body text-light">
                     <div style="height: 200px;">
@@ -252,18 +433,27 @@ document.addEventListener('DOMContentLoaded', function() {
                     </div>
                     <div class="row mt-3 text-center">
                         <div class="col-4">
-                            <div class="h5 text-white">${readings[0]?.value || 'N/A'}</div>
-                            <small class="text-muted">Current</small>
+                            <div class="h4 
+                                ${isTDS ? getTDSQualityClass(currentValue) : 
+                                  sensorLabel.includes('t') ? 'text-info' : 'text-warning'}">
+                                ${currentValue || 'N/A'}
+                            </div>
+                            <small class="text-muted">Current Value</small>
                         </div>
                         <div class="col-4">
-                            <div class="h5 text-muted">${readings.length}</div>
-                            <small class="text-muted">Readings</small>
+                            <div class="h4 text-muted">
+                                ${readings[readings.length-1]?.value || 'N/A'}
+                            </div>
+                            <small class="text-muted">Last Reading</small>
                         </div>
                         <div class="col-4">
-                            <div class="h5 text-muted">${readings[readings.length-1]?.timestamp ? formatIST(readings[readings.length-1].timestamp).split(',')[0] : 'N/A'}</div>
+                            <div class="h6 text-muted">
+                                ${readings[readings.length-1]?.timestamp ? formatIST(readings[readings.length-1].timestamp).split(',')[0] : 'N/A'}
+                            </div>
                             <small class="text-muted">Last Update</small>
                         </div>
                     </div>
+                    ${tdsQualityHTML}
                 </div>
             </div>
         `;
@@ -272,12 +462,15 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Initialize charts
     setTimeout(() => {
-        Object.keys(sensorData).forEach((sensorLabel, index) => {
+        sortedSensors.forEach((sensorLabel, index) => {
             const readings = sensorData[sensorLabel];
             const canvas = document.getElementById(`chart-${sensorLabel}`);
-            const color = colors[index % colors.length];
+            const color = colors[sensorLabel] || ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'][index % 6];
             
             if (!canvas || !readings || readings.length === 0) return;
+            
+            // For TDS, we might want to show different scales
+            const isTDS = sensorLabel === 'tds1';
             
             const labels = readings.map(r => formatChartTime(r.timestamp));
             const values = readings.map(r => r.value);
@@ -309,9 +502,18 @@ document.addEventListener('DOMContentLoaded', function() {
                                 intersect: false,
                                 callbacks: {
                                     title: function(tooltipItems) {
-                                        // Show full IST timestamp in tooltip
                                         const dataIndex = tooltipItems[0].dataIndex;
                                         return formatIST(readings[dataIndex].timestamp);
+                                    },
+                                    label: function(context) {
+                                        let label = sensorLabels[sensorLabel] || sensorLabel;
+                                        label += `: ${context.parsed.y} ${sensorUnits[sensorLabel] || ''}`;
+                                        
+                                        // Add TDS quality in tooltip
+                                        if (isTDS) {
+                                            label += ` (${getTDSQualityText(context.parsed.y)})`;
+                                        }
+                                        return label;
                                     }
                                 }
                             }
@@ -331,7 +533,19 @@ document.addEventListener('DOMContentLoaded', function() {
                             y: { 
                                 display: true,
                                 grid: { color: 'rgba(148, 163, 184, 0.1)' },
-                                ticks: { color: '#94a3b8' }
+                                ticks: { 
+                                    color: '#94a3b8',
+                                    // For TDS, show reference lines
+                                    callback: function(value) {
+                                        if (isTDS) {
+                                            return value + ' ppm';
+                                        }
+                                        return value + (sensorUnits[sensorLabel] || '');
+                                    }
+                                },
+                                // Set appropriate scales for different sensors
+                                min: isTDS ? 0 : undefined,
+                                max: isTDS ? Math.max(500, Math.max(...values) * 1.1) : undefined
                             }
                         },
                         interaction: {
@@ -393,6 +607,31 @@ document.addEventListener('DOMContentLoaded', function() {
     background: rgba(255,255,255,0.02);
     border-radius: 8px;
     padding: 10px;
+}
+
+/* Custom badge styles */
+.badge.bg-success {
+    background-color: rgba(34, 197, 94, 0.2) !important;
+    border: 1px solid #22c55e;
+    color: #86efac !important;
+}
+
+.badge.bg-info {
+    background-color: rgba(59, 130, 246, 0.2) !important;
+    border: 1px solid #3b82f6;
+    color: #93c5fd !important;
+}
+
+.badge.bg-warning {
+    background-color: rgba(245, 158, 11, 0.2) !important;
+    border: 1px solid #f59e0b;
+    color: #fcd34d !important;
+}
+
+.badge.bg-primary {
+    background-color: rgba(14, 165, 233, 0.2) !important;
+    border: 1px solid #0ea5e9;
+    color: #7dd3fc !important;
 }
 </style>
 {% endblock %}

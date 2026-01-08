@@ -1,33 +1,275 @@
 {% extends "base.html" %}
 {% load static %}
 
+{% block title %}Sensor Configurations{% endblock %}
+
 {% block content %}
 <h2>Sensor Configurations</h2>
 
+<!-- Sensor Summary Card -->
+<div class="card mb-4 bg-dark border-light">
+    <div class="card-body">
+        <div class="row text-center">
+            <div class="col-md-3">
+                <h6 class="text-muted">Total Sensors</h6>
+                <h4 class="text-primary">{{ configs|length }}</h4>
+            </div>
+            <div class="col-md-3">
+                <h6 class="text-muted">Temperature Sensors</h6>
+                <h4 class="text-info">{{ configs|filter_sensor_type:"Temperature"|length }}</h4>
+            </div>
+            <div class="col-md-3">
+                <h6 class="text-muted">Pressure Sensors</h6>
+                <h4 class="text-warning">{{ configs|filter_sensor_type:"Pressure"|length }}</h4>
+            </div>
+            <div class="col-md-3">
+                <h6 class="text-muted">TDS Sensors</h6>
+                <h4 class="text-success">{{ configs|filter_sensor_type:"TDS"|length }}</h4>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% if configs %}
-<table border="1" cellpadding="8" cellspacing="0">
-    <thead>
-        <tr>
-            <th>Device Name</th>
-            <th>Sensor Label</th>
-            <th>Sensor Type</th>
-            <th>Unit</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for config in configs %}
-        <tr>
-            <td>{{ config.device.name }}</td>
-            <td>{{ config.sensor_label }}</td>
-            <td>{{ config.sensor_type.name }}</td>
-            <td>{{ config.sensor_type.unit }}</td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
+<div class="table-responsive">
+    <table class="table table-dark table-hover border-light">
+        <thead class="bg-secondary text-light">
+            <tr>
+                <th>Device Name</th>
+                <th>Sensor Label</th>
+                <th>Sensor Type</th>
+                <th>Unit</th>
+                <th>Description</th>
+                <th>Last Reading</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for config in configs %}
+            <tr class="sensor-row" data-type="{{ config.sensor_type.name|lower }}">
+                <td>
+                    <i class="fas fa-microchip me-2 text-primary"></i>
+                    {{ config.device.name }}
+                </td>
+                <td>
+                    <span class="badge sensor-badge 
+                        {% if config.sensor_type.name == 'Temperature' %}bg-info
+                        {% elif config.sensor_type.name == 'Pressure' %}bg-warning
+                        {% elif config.sensor_type.name == 'TDS' %}bg-success
+                        {% else %}bg-secondary{% endif %}">
+                        {{ config.sensor_label }}
+                    </span>
+                </td>
+                <td>
+                    {% if config.sensor_type.name == 'Temperature' %}
+                        <i class="fas fa-thermometer-half me-2 text-info"></i>
+                    {% elif config.sensor_type.name == 'Pressure' %}
+                        <i class="fas fa-tachometer-alt me-2 text-warning"></i>
+                    {% elif config.sensor_type.name == 'TDS' %}
+                        <i class="fas fa-tint me-2 text-success"></i>
+                    {% else %}
+                        <i class="fas fa-sensor me-2 text-muted"></i>
+                    {% endif %}
+                    {{ config.sensor_type.name }}
+                </td>
+                <td>
+                    <code class="unit-display">{{ config.sensor_type.unit }}</code>
+                </td>
+                <td>
+                    <small class="text-muted">
+                        {% if config.sensor_type.name == 'Temperature' %}
+                            Heat exchange temperature monitoring
+                        {% elif config.sensor_type.name == 'Pressure' %}
+                            System pressure monitoring (4-20mA)
+                        {% elif config.sensor_type.name == 'TDS' %}
+                            Water quality monitoring (0-1000 ppm)
+                        {% else %}
+                            General sensor
+                        {% endif %}
+                    </small>
+                </td>
+                <td>
+                    {% with config|get_latest_reading as latest %}
+                        {% if latest %}
+                            <span class="badge bg-dark text-light">
+                                {{ latest.value }} {{ config.sensor_type.unit }}
+                            </span>
+                            <br>
+                            <small class="text-muted">{{ latest.timestamp|timesince }} ago</small>
+                        {% else %}
+                            <span class="badge bg-secondary">No data</span>
+                        {% endif %}
+                    {% endwith %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- TDS Quality Reference -->
+{% if configs|filter_sensor_type:"TDS" %}
+<div class="card mt-4 bg-dark border-success">
+    <div class="card-header bg-success text-white">
+        <i class="fas fa-info-circle me-2"></i>
+        TDS Water Quality Reference
+    </div>
+    <div class="card-body">
+        <div class="row text-center">
+            <div class="col-md-2">
+                <div class="p-2 rounded" style="background: rgba(34, 197, 94, 0.2); border: 1px solid #22c55e;">
+                    <small class="d-block text-success fw-bold">0-50 ppm</small>
+                    <small class="text-muted">Excellent</small>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="p-2 rounded" style="background: rgba(34, 197, 94, 0.1); border: 1px solid #4ade80;">
+                    <small class="d-block text-success">51-150 ppm</small>
+                    <small class="text-muted">Good</small>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="p-2 rounded" style="background: rgba(251, 191, 36, 0.1); border: 1px solid #fbbf24;">
+                    <small class="d-block text-warning">151-250 ppm</small>
+                    <small class="text-muted">Fair</small>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="p-2 rounded" style="background: rgba(251, 113, 133, 0.1); border: 1px solid #fb7185;">
+                    <small class="d-block text-danger">251-350 ppm</small>
+                    <small class="text-muted">Poor</small>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="p-2 rounded" style="background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444;">
+                    <small class="d-block text-danger">351-500 ppm</small>
+                    <small class="text-muted">Very Poor</small>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="p-2 rounded" style="background: rgba(127, 29, 29, 0.2); border: 1px solid #7f1d1d;">
+                    <small class="d-block text-danger">500+ ppm</small>
+                    <small class="text-muted">Unacceptable</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 {% else %}
-<p>No sensor configurations found for your devices.</p>
+<div class="card bg-dark border-light">
+    <div class="card-body text-center py-5">
+        <i class="fas fa-sensor fa-3x text-muted mb-3"></i>
+        <h5 class="text-light">No Sensor Configurations Found</h5>
+        <p class="text-muted">
+            Once your Arduino device sends data, sensor configurations will appear here.
+        </p>
+        <a href="{% url 'customer_dashboard' %}" class="btn btn-primary mt-2">
+            <i class="fas fa-arrow-left me-1"></i>Back to Dashboard
+        </a>
+    </div>
+</div>
 {% endif %}
 
 {% endblock %}
 
+{% block extra_js %}
+<script>
+// Add interactivity to sensor table
+document.addEventListener('DOMContentLoaded', function() {
+    // Filter sensors by type
+    const filterButtons = document.querySelectorAll('.sensor-filter');
+    const sensorRows = document.querySelectorAll('.sensor-row');
+    
+    filterButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const filterType = this.dataset.filter;
+            
+            // Update active button
+            filterButtons.forEach(btn => btn.classList.remove('active'));
+            this.classList.add('active');
+            
+            // Filter rows
+            sensorRows.forEach(row => {
+                if (filterType === 'all') {
+                    row.style.display = '';
+                } else {
+                    if (row.dataset.type === filterType) {
+                        row.style.display = '';
+                    } else {
+                        row.style.display = 'none';
+                    }
+                }
+            });
+        });
+    });
+    
+    // Add hover effects
+    sensorRows.forEach(row => {
+        row.addEventListener('mouseenter', function() {
+            this.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+        });
+        row.addEventListener('mouseleave', function() {
+            this.style.backgroundColor = '';
+        });
+    });
+});
+</script>
+
+<style>
+.sensor-badge {
+    font-size: 0.75rem;
+    padding: 0.35rem 0.65rem;
+    border-radius: 0.5rem;
+}
+
+.table-dark {
+    --bs-table-bg: rgba(30, 41, 59, 0.5);
+    --bs-table-border-color: rgba(148, 163, 184, 0.3);
+}
+
+.sensor-row {
+    transition: all 0.2s ease;
+}
+
+.sensor-row:hover {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+.unit-display {
+    background: rgba(148, 163, 184, 0.1);
+    padding: 0.2rem 0.5rem;
+    border-radius: 0.25rem;
+    font-family: 'Courier New', monospace;
+}
+
+/* Filter buttons */
+.filter-container {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+
+.sensor-filter {
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    background: transparent;
+    color: #94a3b8;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.sensor-filter:hover {
+    background: rgba(148, 163, 184, 0.1);
+    color: #f8fafc;
+}
+
+.sensor-filter.active {
+    background: #3b82f6;
+    border-color: #3b82f6;
+    color: white;
+}
+</style>
+{% endblock %}

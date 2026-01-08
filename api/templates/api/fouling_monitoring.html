@@ -14,6 +14,12 @@
         border-radius: 0.5rem;
         padding: 1rem;
         margin-bottom: 1rem;
+        transition: all 0.3s ease;
+    }
+    
+    .sensor-value-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     }
     
     .sensor-value {
@@ -35,6 +41,38 @@
         border-radius: 0.5rem;
         margin: 1rem 0;
     }
+    
+    .tds-importance {
+        background: rgba(16, 185, 129, 0.1);
+        border-left: 4px solid var(--accent-success);
+        padding: 1rem;
+        border-radius: 0.5rem;
+        margin: 1rem 0;
+    }
+    
+    .fouling-risk-meter {
+        height: 20px;
+        background: linear-gradient(90deg, #10b981 0%, #f59e0b 50%, #ef4444 100%);
+        border-radius: 10px;
+        position: relative;
+        margin: 10px 0;
+    }
+    
+    .risk-indicator {
+        position: absolute;
+        top: -5px;
+        width: 30px;
+        height: 30px;
+        background: white;
+        border-radius: 50%;
+        transform: translateX(-50%);
+        transition: left 0.5s ease;
+    }
+    
+    .chart-container-small {
+        height: 250px;
+        position: relative;
+    }
 </style>
 {% endblock %}
 
@@ -43,69 +81,166 @@
     <div class="col-12">
         <div class="page-header">
             <h1>Fouling Monitoring - {{ device.name }}</h1>
-            <p>Live fouling analysis using actual vs clean condition comparison</p>
+            <p>Comprehensive fouling analysis with TDS-based scaling prediction for caustic plant heat exchangers</p>
         </div>
     </div>
 </div>
 
-<!-- Current Sensor Values -->
+<!-- Current Sensor Values with TDS -->
 <div class="row g-4 mb-4">
     <div class="col-12">
         <div class="card">
-            <div class="card-header">
+            <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0"><i class="fas fa-sensor me-2"></i>Current Operating Conditions</h5>
+                <div class="badge bg-success">TDS Monitoring Active</div>
             </div>
             <div class="card-body">
                 <div class="row text-center" id="currentSensorValues">
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <div class="sensor-value-card">
                             <div class="sensor-label">T1_in (°C)</div>
                             <div class="sensor-value" id="t1_in_value">--</div>
                             <small class="text-muted">Hot Inlet Temp</small>
                         </div>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <div class="sensor-value-card">
                             <div class="sensor-label">T1_out (°C)</div>
                             <div class="sensor-value" id="t1_out_value">--</div>
                             <small class="text-muted">Hot Outlet Temp</small>
                         </div>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <div class="sensor-value-card">
                             <div class="sensor-label">T2_in (°C)</div>
                             <div class="sensor-value" id="t2_in_value">--</div>
                             <small class="text-muted">Cold Inlet Temp</small>
                         </div>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <div class="sensor-value-card">
                             <div class="sensor-label">T2_out (°C)</div>
                             <div class="sensor-value" id="t2_out_value">--</div>
                             <small class="text-muted">Cold Outlet Temp</small>
                         </div>
                     </div>
+                    <div class="col-md-2">
+                        <div class="sensor-value-card" style="border-left: 4px solid #10b981;">
+                            <div class="sensor-label">TDS (ppm)</div>
+                            <div class="sensor-value" id="tds_value">--</div>
+                            <small class="text-muted">Water Quality</small>
+                            <div id="tds_quality" class="mt-1"></div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="sensor-value-card" style="border-left: 4px solid #ef4444;">
+                            <div class="sensor-label">Scaling Risk</div>
+                            <div class="sensor-value" id="scaling_risk_value">--</div>
+                            <small class="text-muted">Based on TDS</small>
+                            <div class="fouling-risk-meter mt-2">
+                                <div class="risk-indicator" id="tds_risk_indicator"></div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
+                
+                <div class="tds-importance">
+                    <h6><i class="fas fa-tint me-2"></i>TDS Impact on Heat Exchanger Fouling</h6>
+                    <p class="mb-1"><strong>For Caustic Plants:</strong> High TDS leads to mineral scaling on heat exchanger plates, reducing heat transfer efficiency by 15-40%.</p>
+                    <p class="mb-0 small">
+                        <strong>Critical Thresholds:</strong> 
+                        <span class="text-success">＜150 ppm (Safe)</span> → 
+                        <span class="text-warning">150-350 ppm (Monitor)</span> → 
+                        <span class="text-danger">＞350 ppm (High Risk)</span>
+                    </p>
+                </div>
+                
                 <div class="calculation-note">
-                    <h6><i class="fas fa-info-circle me-2"></i>Calculation Method</h6>
-                    <p class="mb-1"><strong>Fouling Factor = 1/U_actual - 1/U_clean</strong></p>
-                    <p class="mb-0 small">Where U_actual is calculated from current operating conditions, and U_clean is the design/clean condition value.</p>
+                    <h6><i class="fas fa-calculator me-2"></i>Enhanced Fouling Calculation</h6>
+                    <p class="mb-1"><strong>Total Fouling Factor = Thermal Fouling + TDS Scaling Factor</strong></p>
+                    <p class="mb-0 small">Where TDS Scaling Factor is calculated based on TDS concentration, temperature, and flow velocity using empirical correlations for caustic solutions.</p>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
+<!-- Main Charts Row -->
 <div class="row g-4">
-    <div class="col-md-8">
+    <!-- Left Column: Thermal Fouling Charts -->
+    <div class="col-md-6">
         <div class="card h-100">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">📊 Fouling Factor Trend</h5>
-                <small class="text-muted">Based on actual vs clean performance comparison</small>
+                <h5 class="mb-0">🔥 Thermal Fouling Trend</h5>
+                <small class="text-muted">Based on temperature difference degradation</small>
             </div>
             <div class="card-body">
-                <canvas id="foulingChart" height="100"></canvas>
-                <div id="chartMessage" class="mt-2 text-muted small"></div>
+                <div class="chart-container-small">
+                    <canvas id="thermalFoulingChart"></canvas>
+                </div>
+                <div id="thermalChartMessage" class="mt-2 text-muted small"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Column: TDS-Based Scaling Charts -->
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">💧 TDS Scaling Prediction</h5>
+                <small class="text-muted">Mineral deposition risk based on water quality</small>
+            </div>
+            <div class="card-body">
+                <div class="chart-container-small">
+                    <canvas id="tdsScalingChart"></canvas>
+                </div>
+                <div id="tdsChartMessage" class="mt-2 text-muted small"></div>
+                <div class="mt-3" id="scalingPrediction"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Second Row: Combined Analysis and Controls -->
+<div class="row g-4 mt-4">
+    <div class="col-md-8">
+        <!-- Combined Fouling Analysis -->
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">⚡ Combined Fouling Analysis</h5>
+                <small class="text-muted">Thermal + TDS Scaling = Total Fouling</small>
+            </div>
+            <div class="card-body">
+                <div class="chart-container-small">
+                    <canvas id="combinedFoulingChart"></canvas>
+                </div>
+                <div class="row mt-3 text-center">
+                    <div class="col-md-4">
+                        <div class="sensor-value-card">
+                            <div class="sensor-label">Thermal Fouling</div>
+                            <div class="sensor-value text-warning" id="current_thermal_fouling">--</div>
+                            <small class="text-muted">m²·K/W</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="sensor-value-card">
+                            <div class="sensor-label">TDS Scaling</div>
+                            <div class="sensor-value text-success" id="current_tds_scaling">--</div>
+                            <small class="text-muted">m²·K/W</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="sensor-value-card" style="border-left: 4px solid #ef4444;">
+                            <div class="sensor-label">Total Fouling</div>
+                            <div class="sensor-value text-danger" id="current_total_fouling">--</div>
+                            <small class="text-muted">m²·K/W</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="alert alert-info mt-3" id="combinedRecommendation">
+                    <i class="fas fa-info-circle me-2"></i>
+                    Loading combined fouling analysis...
+                </div>
             </div>
         </div>
     </div>
@@ -114,33 +249,44 @@
         <!-- Current Status -->
         <div class="card mb-3">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">🔥 Current Fouling Status</h5>
-                <button class="btn btn-sm btn-outline-light" onclick="showFoulingInfo()">?</button>
+                <h5 class="mb-0">📊 Current Fouling Status</h5>
+                <button class="btn btn-sm btn-outline-light" onclick="showEnhancedFoulingInfo()">?</button>
             </div>
             <div class="card-body">
                 <div id="currentStatus">
                     <p class="text-muted">Loading current fouling status...</p>
                 </div>
+                <div class="mt-3" id="cleaningRecommendation">
+                    <h6 class="text-light">🧹 Cleaning Recommendation</h6>
+                    <p class="text-muted small mb-1" id="cleaningTime">Calculating optimal cleaning time...</p>
+                    <div class="progress" style="height: 10px;">
+                        <div class="progress-bar bg-success" id="cleaningProgress" style="width: 0%"></div>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <!-- Design Parameters -->
+        <!-- TDS Impact Parameters -->
         <div class="card mb-3">
             <div class="card-header">
-                <h5 class="mb-0">⚙️ Design Parameters</h5>
+                <h5 class="mb-0">🧪 TDS Scaling Parameters</h5>
             </div>
             <div class="card-body">
                 <div class="mb-2">
-                    <small class="text-muted">Clean U Value (Design)</small>
-                    <div class="fw-bold text-info" id="designUValue">800 W/m²·K</div>
+                    <small class="text-muted">Saturation Index</small>
+                    <div class="fw-bold text-info" id="saturationIndex">--</div>
                 </div>
                 <div class="mb-2">
-                    <small class="text-muted">Heat Transfer Area</small>
-                    <div class="fw-bold text-success" id="designArea">15.5 m²</div>
+                    <small class="text-muted">Scaling Rate</small>
+                    <div class="fw-bold text-warning" id="scalingRate">-- mg/m²·h</div>
                 </div>
                 <div class="mb-2">
-                    <small class="text-muted">Flow Rates</small>
-                    <div class="fw-bold text-warning" id="designFlows">Hot: 10 kg/s, Cold: 12 kg/s</div>
+                    <small class="text-muted">Calcium Carbonate Equiv.</small>
+                    <div class="fw-bold text-success" id="caco3Equiv">-- ppm</div>
+                </div>
+                <div class="mb-2">
+                    <small class="text-muted">pH Impact Factor</small>
+                    <div class="fw-bold text-danger" id="phFactor">--</div>
                 </div>
             </div>
         </div>
@@ -162,14 +308,17 @@
                     </div>
                     <div class="d-grid gap-2 mt-3">
                         <button type="submit" class="btn btn-sm btn-primary">
-                            ⬇️ Download Fouling CSV
+                            <i class="fas fa-file-csv me-1"></i>Download Fouling CSV
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-success" onclick="downloadTDSAnalysisCSV()">
+                            <i class="fas fa-tint me-1"></i>Download TDS Analysis
                         </button>
                         <button type="button" class="btn btn-sm btn-outline-secondary" onclick="downloadSensorCSV()">
-                            ⬇️ Download Raw Sensor CSV
+                            <i class="fas fa-sensor me-1"></i>Download Raw Sensor CSV
                         </button>
                     </div>
                     <p class="small text-muted mt-2 mb-0">
-                        CSV exports can be used in Excel, Power BI, or any reporting tool.
+                        Enhanced reports include TDS-based scaling predictions.
                     </p>
                 </form>
             </div>
@@ -177,17 +326,37 @@
     </div>
 </div>
 
-<!-- Historical table -->
+<!-- Historical TDS & Fouling Data -->
 <div class="row g-4 mt-1">
     <div class="col-12">
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">🕒 Historical Fouling Data</h5>
-                <small class="text-muted">Based on actual operating conditions vs design parameters</small>
+                <h5 class="mb-0">📈 Historical TDS & Fouling Correlation</h5>
+                <small class="text-muted">TDS vs Thermal Performance degradation analysis</small>
+            </div>
+            <div class="card-body">
+                <div class="chart-container-small">
+                    <canvas id="tdsFoulingCorrelationChart"></canvas>
+                </div>
+                <div class="mt-3" id="correlationAnalysis">
+                    <p class="text-muted">Analyzing correlation between TDS levels and fouling rate...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Detailed Historical Table -->
+<div class="row g-4 mt-1">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">🕒 Detailed Historical Analysis</h5>
+                <small class="text-muted">Integrated thermal and TDS-based fouling data</small>
             </div>
             <div class="card-body">
                 <div id="historicalData">
-                    <p class="text-muted">Loading historical fouling data...</p>
+                    <p class="text-muted">Loading historical fouling data with TDS analysis...</p>
                 </div>
             </div>
         </div>
@@ -204,59 +373,163 @@ const sensorDataUrl = "{% url 'get_sensor_data' device.id %}";
 const foulingReportCsvUrl = "{% url 'device_fouling_report_csv' device.id %}";
 const sensorReportCsvUrl = "{% url 'device_sensor_report_csv' device.id %}";
 
-// Design parameters (should come from device configuration)
+// ========== UPDATED DESIGN PARAMETERS ==========
+// Based on PL0719A-SS316-5T-EPDM-1P specification sheet
 const DESIGN_PARAMS = {
-    U_clean: 800,           // W/m²·K - Design clean U value
-    heat_transfer_area: 15.5, // m² - Heat transfer area
-    hot_flow_rate: 10,      // kg/s - Design hot flow rate
-    cold_flow_rate: 12,     // kg/s - Design cold flow rate
-    T1_in_design: 85,       // °C - Design hot inlet temperature
-    T2_in_design: 25        // °C - Design cold inlet temperature
+    // Heat exchanger basic parameters
+    model: 'PL0719A-SS316-5T-EPDM-1P',
+    heat_duty: 1719.09,            // kW - Design heat duty
+    heat_transfer_area: 21.36,     // m² - Effective heat transfer area
+    design_ΔT: 8.02,               // K - Design LMTD
+    overdesign: 10,                // % - Overdesign margin
+    
+    // Hot side parameters
+    hot_in_design: 50.00,          // °C - Design hot inlet temperature
+    hot_out_design: 38.00,         // °C - Design hot outlet temperature
+    hot_flow_rate_design: 41.18,   // kg/s - Design hot mass flow rate
+    
+    // Cold side parameters
+    cold_in_design: 32.00,         // °C - Design cold inlet temperature
+    cold_out_design: 41.00,        // °C - Design cold outlet temperature
+    cold_flow_rate_design: 41.31,  // kg/s - Design cold mass flow rate
+    
+    // Fluid properties (water)
+    specific_heat: 4.176,          // kJ/kgK - Average specific heat capacity
+    density: 990.0,                // kg/m³ - Average density
+    
+    // Plate properties
+    plate_material: '1.4404 (SS316)',
+    plate_thickness: 0.0005,       // m (0.5 mm)
+    plate_gap: 0.003,              // m - Estimated plate gap
+    max_plates: 130,               // Maximum number of plates
+    channel_mix: '37*HH + 8*LL',   // Channel configuration
+    
+    // Velocities
+    channel_velocity_min: 0.71,    // m/s - Minimum channel velocity
+    channel_velocity_max: 2.62,    // m/s - Maximum channel velocity
+    connection_velocity: 4.90,     // m/s - Connection velocity
+    
+    // Design limits
+    max_design_pressure: 10.0,     // barg - Maximum design pressure
+    max_design_temperature: 110.0, // °C - Maximum design temperature
+    
+    // For TDS scaling calculations
+    system_pH: 9.5,                // Typical pH for caustic plant
+    max_tds_limit: 500,            // ppm - Maximum acceptable TDS
+    scaling_constant: 2.5e-7       // Empirical scaling constant for caustic solutions
 };
 
-const ctx = document.getElementById('foulingChart').getContext('2d');
-const foulingChart = new Chart(ctx, {
+// Initialize charts
+const thermalCtx = document.getElementById('thermalFoulingChart').getContext('2d');
+const tdsCtx = document.getElementById('tdsScalingChart').getContext('2d');
+const combinedCtx = document.getElementById('combinedFoulingChart').getContext('2d');
+const correlationCtx = document.getElementById('tdsFoulingCorrelationChart').getContext('2d');
+
+const thermalChart = new Chart(thermalCtx, {
     type: 'line',
     data: {
         labels: [],
         datasets: [{
-            label: 'Fouling Factor (m²·K/W)',
+            label: 'Thermal Fouling Factor',
             data: [],
-            borderWidth: 3,
-            borderColor: '#3b82f6',
-            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+            borderWidth: 2,
+            borderColor: '#f59e0b',
+            backgroundColor: 'rgba(245, 158, 11, 0.1)',
             tension: 0.4,
             fill: true
+        }]
+    },
+    options: getChartOptions('Thermal Fouling Factor (m²·K/W)')
+});
+
+const tdsChart = new Chart(tdsCtx, {
+    type: 'line',
+    data: {
+        labels: [],
+        datasets: [{
+            label: 'TDS Scaling Factor',
+            data: [],
+            borderWidth: 2,
+            borderColor: '#10b981',
+            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+            tension: 0.4,
+            fill: true
+        }]
+    },
+    options: getChartOptions('TDS Scaling Factor (m²·K/W)')
+});
+
+const combinedChart = new Chart(combinedCtx, {
+    type: 'line',
+    data: {
+        labels: [],
+        datasets: [
+            {
+                label: 'Thermal Fouling',
+                data: [],
+                borderWidth: 2,
+                borderColor: '#f59e0b',
+                backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                tension: 0.4,
+                fill: false
+            },
+            {
+                label: 'TDS Scaling',
+                data: [],
+                borderWidth: 2,
+                borderColor: '#10b981',
+                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                tension: 0.4,
+                fill: false
+            },
+            {
+                label: 'Total Fouling',
+                data: [],
+                borderWidth: 3,
+                borderColor: '#ef4444',
+                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                tension: 0.4,
+                fill: true
+            }
+        ]
+    },
+    options: getChartOptions('Fouling Factors (m²·K/W)', true)
+});
+
+const correlationChart = new Chart(correlationCtx, {
+    type: 'scatter',
+    data: {
+        datasets: [{
+            label: 'TDS vs Fouling',
+            data: [],
+            backgroundColor: 'rgba(59, 130, 246, 0.6)',
+            borderColor: '#3b82f6',
+            borderWidth: 1
         }]
     },
     options: {
         responsive: true,
         scales: {
+            x: {
+                title: {
+                    display: true,
+                    text: 'TDS (ppm)'
+                },
+                grid: { color: 'rgba(255, 255, 255, 0.1)' }
+            },
             y: {
-                beginAtZero: true,
                 title: {
                     display: true,
                     text: 'Fouling Factor (m²·K/W)'
                 },
-                grid: {
-                    color: 'rgba(255, 255, 255, 0.1)'
-                }
-            },
-            x: {
-                title: {
-                    display: true,
-                    text: 'Timestamp'
-                },
-                grid: {
-                    color: 'rgba(255, 255, 255, 0.1)'
-                }
+                grid: { color: 'rgba(255, 255, 255, 0.1)' }
             }
         },
         plugins: {
             tooltip: {
                 callbacks: {
                     label: function(context) {
-                        return `Fouling: ${context.parsed.y.toExponential(4)} m²·K/W`;
+                        return `TDS: ${context.parsed.x} ppm, Fouling: ${context.parsed.y.toExponential(4)}`;
                     }
                 }
             }
@@ -264,170 +537,395 @@ const foulingChart = new Chart(ctx, {
     }
 });
 
-// PARALLEL FLOW LMTD Calculation Function
-function calculateParallelLMTD(T1_in, T1_out, T2_in, T2_out) {
-    // For parallel flow: ΔT1 = T1_in - T2_in, ΔT2 = T1_out - T2_out
-    const deltaT1 = T1_in - T2_in;
-    const deltaT2 = T1_out - T2_out;
-    
-    if (deltaT1 <= 0 || deltaT2 <= 0) {
-        console.error("Invalid temperature differences for Parallel Flow LMTD");
-        return 0;
-    }
-    
-    if (Math.abs(deltaT1 - deltaT2) < 0.001) {
-        return deltaT1;
-    }
-    
-    return (deltaT1 - deltaT2) / Math.log(deltaT1 / deltaT2);
-}
-
-// Calculate what the outlet temperatures SHOULD BE in clean conditions
-function calculateCleanOutlets(T1_in, T2_in, hot_flow_rate, cold_flow_rate, U_clean, area) {
-    const Cp = 4186; // J/kg·K
-    
-    // For parallel flow heat exchanger
-    const R1 = hot_flow_rate * Cp;
-    const R2 = cold_flow_rate * Cp;
-    const C_min = Math.min(R1, R2);
-    const C_max = Math.max(R1, R2);
-    const C_r = C_min / C_max;
-    
-    const NTU = (U_clean * area) / C_min;
-    
-    // Effectiveness for parallel flow
-    const effectiveness = (1 - Math.exp(-NTU * (1 + C_r))) / (1 + C_r);
-    
-    const Q_max = C_min * (T1_in - T2_in);
-    const Q_clean = effectiveness * Q_max;
-    
-    // Calculate outlet temperatures for clean conditions
-    const T1_out_clean = T1_in - Q_clean / (hot_flow_rate * Cp);
-    const T2_out_clean = T2_in + Q_clean / (cold_flow_rate * Cp);
-    
+function getChartOptions(title, multiDataset = false) {
     return {
-        T1_out_clean: T1_out_clean,
-        T2_out_clean: T2_out_clean,
-        Q_clean: Q_clean,
-        effectiveness: effectiveness
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+            y: {
+                beginAtZero: true,
+                title: { display: true, text: title },
+                grid: { color: 'rgba(255, 255, 255, 0.1)' }
+            },
+            x: {
+                title: { display: true, text: 'Time' },
+                grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                ticks: {
+                    maxTicksLimit: 10,
+                    callback: function(value, index, values) {
+                        if (index % Math.floor(values.length / 10) === 0) {
+                            return this.getLabelForValue(value);
+                        }
+                        return '';
+                    }
+                }
+            }
+        },
+        plugins: {
+            legend: { display: multiDataset },
+            tooltip: {
+                mode: 'index',
+                intersect: false,
+                callbacks: {
+                    label: function(context) {
+                        return `${context.dataset.label}: ${context.parsed.y.toExponential(4)} m²·K/W`;
+                    }
+                }
+            }
+        }
     };
 }
 
-// Calculate fouling factor using CORRECT engineering approach
-function calculateFoulingFactor(T1_in, T1_out, T2_in, T2_out) {
-    const Cp = 4186; // Specific heat of water in J/kg·K
+// ========== SIMPLIFIED FOULING CALCULATION (NO PRESSURE DROP) ==========
+
+// 1. Calculate LMTD without pressure drop dependency
+function calculateLMTD(T1_in, T1_out, T2_in, T2_out) {
+    // Simple LMTD calculation (Counter-current flow)
+    const ΔT1 = T1_in - T2_out;  // Hot in - Cold out
+    const ΔT2 = T1_out - T2_in;  // Hot out - Cold in
     
-    // Calculate actual heat duty from measured temperatures
-    const heat_duty_hot = DESIGN_PARAMS.hot_flow_rate * Cp * (T1_in - T1_out);
-    const heat_duty_cold = DESIGN_PARAMS.cold_flow_rate * Cp * (T2_out - T2_in);
-    const heat_duty_actual = (heat_duty_hot + heat_duty_cold) / 2;
-    
-    // Calculate actual LMTD from measured temperatures
-    const lmtd_actual = calculateParallelLMTD(T1_in, T1_out, T2_in, T2_out);
-    
-    if (lmtd_actual <= 0 || heat_duty_actual <= 0) {
-        return {
-            fouling_factor: 0,
-            u_actual: 0,
-            performance_ratio: 0,
-            heat_duty: 0,
-            lmtd_actual: 0,
-            severity: "Insufficient Data",
-            recommendation: "Check sensor readings - invalid temperature differences",
-            risk_level: "Unknown",
-            error: true
+    // Avoid division by zero or negative values
+    if (ΔT1 <= 0 || ΔT2 <= 0) {
+        return { 
+            lmtd: 0, 
+            error: "Temperature crossover detected",
+            ΔT1: ΔT1,
+            ΔT2: ΔT2
         };
     }
     
-    // Calculate actual U value from current operating conditions
-    const u_actual = heat_duty_actual / (DESIGN_PARAMS.heat_transfer_area * lmtd_actual);
-    
-    // Calculate what the performance SHOULD BE in clean conditions
-    const cleanConditions = calculateCleanOutlets(
-        T1_in, T2_in, 
-        DESIGN_PARAMS.hot_flow_rate, DESIGN_PARAMS.cold_flow_rate,
-        DESIGN_PARAMS.U_clean, DESIGN_PARAMS.heat_transfer_area
-    );
-    
-    // Calculate clean LMTD
-    const lmtd_clean = calculateParallelLMTD(
-        T1_in, cleanConditions.T1_out_clean,
-        T2_in, cleanConditions.T2_out_clean
-    );
-    
-    // CORRECT Fouling Factor Calculation
-    let fouling_factor = 0;
-    if (u_actual > 0 && DESIGN_PARAMS.U_clean > 0) {
-        fouling_factor = Math.max(0, (1 / u_actual - 1 / DESIGN_PARAMS.U_clean));
-    }
-    
-    // Performance ratio (actual vs design)
-    const performance_ratio = u_actual / DESIGN_PARAMS.U_clean;
-    
-    // Determine severity
-    let severity, color_code, recommendation, risk_level;
-
-    if (fouling_factor < 0.0001) {
-        severity = "No Fouling";
-        color_code = "success";
-        recommendation = "Optimal performance. Continue monitoring.";
-        risk_level = "Low";
-    } else if (fouling_factor < 0.0005) {
-        severity = "Minor Fouling";
-        color_code = "info";
-        recommendation = "Minor deposits detected. Schedule routine inspection.";
-        risk_level = "Low";
-    } else if (fouling_factor < 0.001) {
-        severity = "Moderate Fouling";
-        color_code = "warning";
-        recommendation = "Moderate fouling. Plan cleaning within 2-4 weeks.";
-        risk_level = "Medium";
-    } else if (fouling_factor < 0.002) {
-        severity = "Severe Fouling";
-        color_code = "danger";
-        recommendation = "Severe fouling. Schedule immediate cleaning.";
-        risk_level = "High";
-    } else {
-        severity = "Critical Fouling";
-        color_code = "dark";
-        recommendation = "Critical condition. Immediate maintenance required.";
-        risk_level = "Critical";
-    }
+    // LMTD formula
+    const lmtd = (ΔT1 - ΔT2) / Math.log(ΔT1 / ΔT2);
     
     return {
-        fouling_factor: fouling_factor,
-        u_actual: u_actual,
-        u_clean: DESIGN_PARAMS.U_clean,
-        performance_ratio: performance_ratio,
-        heat_duty: heat_duty_actual,
-        lmtd_actual: lmtd_actual,
-        lmtd_clean: lmtd_clean,
-        T1_out_clean: cleanConditions.T1_out_clean,
-        T2_out_clean: cleanConditions.T2_out_clean,
-        effectiveness_clean: cleanConditions.effectiveness,
-        severity: severity,
-        color_code: color_code,
-        recommendation: recommendation,
-        risk_level: risk_level,
-        error: false
+        lmtd: lmtd,
+        ΔT1: ΔT1,
+        ΔT2: ΔT2,
+        effectiveness: (T1_in - T1_out) / (T1_in - T2_in)  // NTU method approximation
     };
 }
 
-// Load current sensor values
+// 2. Calculate overall heat transfer coefficient (U)
+function calculateU(T1_in, T1_out, T2_in, T2_out) {
+    const lmtdResult = calculateLMTD(T1_in, T1_out, T2_in, T2_out);
+    
+    if (lmtdResult.error || lmtdResult.lmtd <= 0) {
+        return {
+            U: 0,
+            error: lmtdResult.error || "Invalid LMTD",
+            lmtd: lmtdResult.lmtd
+        };
+    }
+    
+    // Calculate heat transfer (Watts)
+    const Q = DESIGN_PARAMS.hot_flow_rate_design * DESIGN_PARAMS.specific_heat * 1000 * 
+              (T1_in - T1_out);
+    
+    // U = Q / (A * ΔT)
+    const U = Q / (DESIGN_PARAMS.heat_transfer_area * lmtdResult.lmtd);
+    
+    return {
+        U: U,
+        lmtd: lmtdResult.lmtd,
+        heat_transfer: Q / 1000,  // kW
+        effectiveness: lmtdResult.effectiveness
+    };
+}
+
+// 3. Calculate fouling factor (Simplified - no pressure drop)
+function calculateFoulingFactor(T1_in, T1_out, T2_in, T2_out) {
+    // Get current U value
+    const currentU = calculateU(T1_in, T1_out, T2_in, T2_out);
+    
+    if (currentU.error || currentU.U <= 0) {
+        return {
+            fouling_factor: 0,
+            error: currentU.error || "Invalid U value",
+            severity: "Error",
+            color_code: "secondary"
+        };
+    }
+    
+    // Calculate clean U value (design U with overdesign factor)
+    const cleanU = (DESIGN_PARAMS.heat_duty * 1000) / 
+                   (DESIGN_PARAMS.heat_transfer_area * DESIGN_PARAMS.design_ΔT);
+    
+    // Fouling factor: R_f = 1/U_current - 1/U_clean
+    const foulingFactor = (1 / currentU.U) - (1 / cleanU);
+    
+    // Ensure non-negative value
+    const correctedFouling = Math.max(0, foulingFactor);
+    
+    // Severity classification
+    let severity, color_code;
+    const normalizedFouling = correctedFouling * 1e4; // Scale for readability
+    
+    if (normalizedFouling < 0.5) {
+        severity = "Clean";
+        color_code = "success";
+    } else if (normalizedFouling < 1.0) {
+        severity = "Low Fouling";
+        color_code = "info";
+    } else if (normalizedFouling < 2.0) {
+        severity = "Moderate Fouling";
+        color_code = "warning";
+    } else if (normalizedFouling < 5.0) {
+        severity = "High Fouling";
+        color_code = "danger";
+    } else {
+        severity = "Critical Fouling";
+        color_code = "dark";
+    }
+    
+    // Calculate efficiency loss
+    const efficiencyLoss = ((cleanU - currentU.U) / cleanU) * 100;
+    
+    return {
+        fouling_factor: correctedFouling,
+        u_current: currentU.U,
+        u_clean: cleanU,
+        lmtd_current: currentU.lmtd,
+        heat_transfer_current: currentU.heat_transfer,
+        efficiency_loss: efficiencyLoss,
+        severity: severity,
+        color_code: color_code,
+        normalized_value: normalizedFouling
+    };
+}
+
+// 4. Calculate thermal fouling (simplified performance degradation)
+function calculateThermalFouling(T1_in, T1_out, T2_in, T2_out) {
+    const foulingResult = calculateFoulingFactor(T1_in, T1_out, T2_in, T2_out);
+    
+    if (foulingResult.error) {
+        return foulingResult;
+    }
+    
+    // Performance degradation based on ΔT approach (no pressure drop)
+    const designHeatTransfer = DESIGN_PARAMS.heat_duty;
+    const actualHeatTransfer = foulingResult.heat_transfer_current;
+    const performanceRatio = actualHeatTransfer / designHeatTransfer;
+    
+    // Temperature approach degradation
+    const designApproach = DESIGN_PARAMS.hot_out_design - DESIGN_PARAMS.cold_in_design;
+    const actualApproach = T1_out - T2_in;
+    const approachDegradation = (designApproach - actualApproach) / designApproach * 100;
+    
+    return {
+        ...foulingResult,
+        performance_ratio: performanceRatio,
+        approach_degradation: Math.max(0, approachDegradation),
+        thermal_resistance: foulingResult.fouling_factor
+    };
+}
+
+// ========== ENHANCED TDS-BASED SCALING CALCULATIONS ==========
+
+// 1. Calculate TDS Scaling Factor using empirical correlation for caustic plants
+function calculateTDSScalingFactor(tdsValue, temperature, flowVelocity, pH = DESIGN_PARAMS.system_pH) {
+    // Base scaling factor from TDS (ppm)
+    let scalingFactor = 0;
+    
+    // Empirical scaling model for caustic plants:
+    // Scaling increases with TDS, temperature, and decreases with flow velocity
+    
+    // 1. Base TDS impact (non-linear)
+    if (tdsValue > 0) {
+        const tdsBase = Math.min(tdsValue, DESIGN_PARAMS.max_tds_limit);
+        scalingFactor = DESIGN_PARAMS.scaling_constant * Math.pow(tdsBase, 1.2);
+    }
+    
+    // 2. Temperature acceleration factor (Arrhenius-type)
+    const tempFactor = Math.exp(0.03 * (temperature - 25)); // 3% increase per °C
+    
+    // 3. Flow velocity reduction factor (turbulence reduces scaling)
+    const velocityFactor = Math.max(0.5, Math.exp(-0.8 * flowVelocity));
+    
+    // 4. pH adjustment for caustic environment
+    const pHFactor = pH > 9 ? 1.5 : 1.0; // Higher pH in caustic increases scaling
+    
+    // Combined scaling factor (m²·K/W)
+    const totalScaling = scalingFactor * tempFactor * velocityFactor * pHFactor;
+    
+    return {
+        scaling_factor: totalScaling,
+        base_contribution: scalingFactor,
+        temp_effect: tempFactor,
+        velocity_effect: velocityFactor,
+        ph_effect: pHFactor
+    };
+}
+
+// 2. Calculate Saturation Index (Langelier Saturation Index for caustic)
+function calculateSaturationIndex(tds, temperature, pH) {
+    // Simplified LSI calculation for caustic conditions
+    const tempC = temperature;
+    const tds_mgL = tds;
+    
+    // Calculate pH of saturation (pHs)
+    const A = Math.log10(tds_mgL) - 1;
+    const B = -13.12 * Math.log10(tempC + 273) + 34.55;
+    const C = Math.log10(tds_mgL) - 0.4;
+    const pHs = (9.3 + A + B) - C;
+    
+    // LSI = pH - pHs
+    const LSI = pH - pHs;
+    
+    return {
+        lsi: LSI,
+        phs: pHs,
+        interpretation: LSI > 0.5 ? "Scaling Tendency" : 
+                       LSI < -0.5 ? "Corrosive" : "Balanced"
+    };
+}
+
+// 3. Calculate Scaling Rate (mg/m²·h)
+function calculateScalingRate(tds, temperature, flowVelocity) {
+    // Empirical scaling rate for calcium carbonate in caustic environment
+    const baseRate = 0.05; // mg/m²·h per 100 ppm
+    const tdsFactor = tds / 100;
+    const tempFactor = Math.exp(0.02 * (temperature - 25));
+    const flowFactor = Math.max(0.3, Math.exp(-0.6 * flowVelocity));
+    
+    const scalingRate = baseRate * tdsFactor * tempFactor * flowFactor;
+    
+    return scalingRate;
+}
+
+// 4. Get TDS Quality and Risk Level
+function getTDSQuality(tdsValue) {
+    if (tdsValue <= 50) {
+        return { quality: "Excellent", color: "#10b981", risk: "Low", riskPercent: 10 };
+    } else if (tdsValue <= 150) {
+        return { quality: "Good", color: "#22c55e", risk: "Low", riskPercent: 25 };
+    } else if (tdsValue <= 250) {
+        return { quality: "Fair", color: "#f59e0b", risk: "Medium", riskPercent: 50 };
+    } else if (tdsValue <= 350) {
+        return { quality: "Poor", color: "#f97316", risk: "High", riskPercent: 75 };
+    } else if (tdsValue <= 500) {
+        return { quality: "Very Poor", color: "#ef4444", risk: "Critical", riskPercent: 90 };
+    } else {
+        return { quality: "Unacceptable", color: "#dc2626", risk: "Emergency", riskPercent: 100 };
+    }
+}
+
+// 5. Calculate Optimal Cleaning Time based on TDS and Fouling
+function calculateCleaningRecommendation(thermalFouling, tdsScaling, currentTDS) {
+    const totalFouling = thermalFouling + tdsScaling;
+    
+    // Critical fouling threshold (industry standard for plate heat exchangers)
+    const criticalFouling = 0.001; // m²·K/W
+    
+    // Calculate remaining useful life
+    const foulingRate = totalFouling; // Simplified - should be based on trend
+    const remainingLife = Math.max(0, (criticalFouling - totalFouling) / (foulingRate || 0.000001));
+    
+    let recommendation, urgency, progressPercent;
+    
+    if (totalFouling > criticalFouling * 0.8) {
+        recommendation = "Immediate cleaning required - severe scaling detected";
+        urgency = "danger";
+        progressPercent = 100;
+    } else if (totalFouling > criticalFouling * 0.6) {
+        recommendation = "Schedule cleaning within 1 week";
+        urgency = "warning";
+        progressPercent = 80;
+    } else if (totalFouling > criticalFouling * 0.4) {
+        recommendation = "Plan cleaning within 2-4 weeks";
+        urgency = "info";
+        progressPercent = 60;
+    } else if (totalFouling > criticalFouling * 0.2) {
+        recommendation = "Monitor closely - cleaning in 1-2 months";
+        urgency = "success";
+        progressPercent = 40;
+    } else {
+        recommendation = "Optimal performance - continue regular monitoring";
+        urgency = "success";
+        progressPercent = 20;
+    }
+    
+    // Adjust based on TDS
+    const tdsQuality = getTDSQuality(currentTDS);
+    if (tdsQuality.riskPercent > 50) {
+        recommendation += " (High TDS accelerates scaling)";
+        progressPercent = Math.min(100, progressPercent + 20);
+    }
+    
+    return {
+        recommendation: recommendation,
+        urgency: urgency,
+        progressPercent: progressPercent,
+        remainingDays: Math.round(remainingLife * 30), // Convert to days
+        totalFouling: totalFouling,
+        criticalThreshold: criticalFouling
+    };
+}
+
+// ========== ENHANCED FOULING CALCULATION WITH TDS INTEGRATION ==========
+
+function calculateEnhancedFouling(T1_in, T1_out, T2_in, T2_out, tdsValue) {
+    // 1. Calculate thermal fouling (simplified, no pressure drop)
+    const thermalResult = calculateThermalFouling(T1_in, T1_out, T2_in, T2_out);
+    
+    if (thermalResult.error) {
+        return thermalResult;
+    }
+    
+    // 2. Calculate TDS-based scaling (using average temperature)
+    const avgTemp = (T1_in + T2_in) / 2;
+    const avgVelocity = (DESIGN_PARAMS.channel_velocity_min + DESIGN_PARAMS.channel_velocity_max) / 2;
+    
+    const tdsScaling = calculateTDSScalingFactor(tdsValue, avgTemp, avgVelocity);
+    const saturation = calculateSaturationIndex(tdsValue, avgTemp, DESIGN_PARAMS.system_pH);
+    const scalingRate = calculateScalingRate(tdsValue, avgTemp, avgVelocity);
+    const tdsQuality = getTDSQuality(tdsValue);
+    
+    // 3. Calculate total fouling (thermal + TDS scaling)
+    const totalFouling = thermalResult.fouling_factor + tdsScaling.scaling_factor;
+    
+    // 4. Enhanced severity assessment
+    let enhancedSeverity = thermalResult.severity;
+    
+    // Adjust severity based on TDS
+    if (tdsQuality.riskPercent > 75 && enhancedSeverity !== "Critical Fouling") {
+        enhancedSeverity = "Critical Scaling";
+    } else if (tdsQuality.riskPercent > 50 && !enhancedSeverity.includes("Critical")) {
+        enhancedSeverity = enhancedSeverity.replace("Fouling", "Scaling");
+    }
+    
+    // 5. Calculate calcium carbonate equivalent
+    const caco3Equiv = tdsValue * 0.6; // Simplified conversion
+    
+    return {
+        ...thermalResult,
+        tds_scaling_factor: tdsScaling.scaling_factor,
+        total_fouling_factor: totalFouling,
+        tds_value: tdsValue,
+        tds_quality: tdsQuality,
+        saturation_index: saturation.lsi,
+        scaling_rate: scalingRate,
+        caco3_equivalent: caco3Equiv,
+        ph_impact: tdsScaling.ph_effect,
+        enhanced_severity: enhancedSeverity,
+        cleaning_recommendation: calculateCleaningRecommendation(
+            thermalResult.fouling_factor, 
+            tdsScaling.scaling_factor,
+            tdsValue
+        ),
+        overall_efficiency: 100 - (thermalResult.efficiency_loss + (tdsQuality.riskPercent / 2))
+    };
+}
+
+// ========== UI UPDATE FUNCTIONS ==========
+
 async function loadCurrentSensorValues() {
     try {
-        // Update design parameters display
-        document.getElementById('designUValue').textContent = DESIGN_PARAMS.U_clean + ' W/m²·K';
-        document.getElementById('designArea').textContent = DESIGN_PARAMS.heat_transfer_area + ' m²';
-        document.getElementById('designFlows').textContent = 
-            `Hot: ${DESIGN_PARAMS.hot_flow_rate} kg/s, Cold: ${DESIGN_PARAMS.cold_flow_rate} kg/s`;
-
         const response = await fetch(sensorDataUrl + "?limit=1");
         const data = await response.json();
         
         if (data.sensors) {
             const sensors = data.sensors;
-            let T1_in, T1_out, T2_in, T2_out;
+            let T1_in, T1_out, T2_in, T2_out, TDS;
             
             // Extract sensor values
             Object.keys(sensors).forEach(sensorKey => {
@@ -447,14 +945,34 @@ async function loadCurrentSensorValues() {
                     } else if (sensorKey.toLowerCase().includes('t2_out')) {
                         T2_out = latestValue;
                         document.getElementById('t2_out_value').textContent = latestValue.toFixed(1);
+                    } else if (sensorKey.toLowerCase().includes('tds')) {
+                        TDS = latestValue;
+                        document.getElementById('tds_value').textContent = latestValue.toFixed(1);
+                        
+                        // Update TDS quality display
+                        const tdsQuality = getTDSQuality(latestValue);
+                        document.getElementById('tds_quality').innerHTML = `
+                            <span class="badge" style="background-color: ${tdsQuality.color}">
+                                ${tdsQuality.quality}
+                            </span>
+                        `;
+                        
+                        // Update risk indicator
+                        const riskPercent = tdsQuality.riskPercent;
+                        document.getElementById('tds_risk_indicator').style.left = `${riskPercent}%`;
+                        document.getElementById('scaling_risk_value').textContent = tdsQuality.risk;
                     }
                 }
             });
             
-            // If we have all required sensor values, calculate current fouling
-            if (T1_in !== undefined && T1_out !== undefined && T2_in !== undefined && T2_out !== undefined) {
-                const currentFouling = calculateFoulingFactor(T1_in, T1_out, T2_in, T2_out);
-                updateCurrentStatus(currentFouling);
+            // If we have all required sensor values, calculate enhanced fouling
+            if (T1_in !== undefined && T1_out !== undefined && 
+                T2_in !== undefined && T2_out !== undefined && TDS !== undefined) {
+                
+                const enhancedFouling = calculateEnhancedFouling(T1_in, T1_out, T2_in, T2_out, TDS);
+                updateCurrentStatus(enhancedFouling);
+                updateTDSParameters(enhancedFouling);
+                updateCombinedAnalysis(enhancedFouling);
             }
         }
     } catch (error) {
@@ -465,179 +983,305 @@ async function loadCurrentSensorValues() {
 function updateCurrentStatus(foulingData) {
     const statusDiv = document.getElementById('currentStatus');
     
-    if (foulingData.error) {
-        statusDiv.innerHTML = `
-            <div class="alert alert-warning">
-                <h6>Calculation Error</h6>
-                <p>${foulingData.recommendation}</p>
-                <p class="small mb-0">Please check that T1_in > T2_in and T1_out > T2_out for parallel flow.</p>
+    let statusHTML = `
+        <div class="d-flex align-items-center mb-2">
+            <div class="me-3">
+                <div class="sensor-label">Overall Status</div>
+                <div class="sensor-value text-${foulingData.color_code}">
+                    ${foulingData.enhanced_severity || foulingData.severity}
+                </div>
             </div>
-        `;
-        return;
-    }
-
-    const colorClass = `alert-${foulingData.color_code}`;
-    const perfPct = (foulingData.performance_ratio * 100).toFixed(1);
-
-    statusDiv.innerHTML = `
-        <div class="alert alert-${foulingData.color_code}">
-            <h6>${foulingData.severity}</h6>
-            <p><strong>Fouling Factor:</strong> ${foulingData.fouling_factor > 0 ? foulingData.fouling_factor.toExponential(4) : '0'} m²·K/W</p>
-            <p><strong>Performance Ratio:</strong> ${perfPct}% (U_actual / U_clean)</p>
-            <p><strong>Actual U:</strong> ${foulingData.u_actual.toFixed(1)} W/m²·K</p>
-            <p><strong>Clean U (Design):</strong> ${foulingData.u_clean} W/m²·K</p>
-            <p><strong>Heat Duty:</strong> ${(foulingData.heat_duty / 1000).toFixed(1)} kW</p>
-            <p><strong>Action:</strong> ${foulingData.recommendation}</p>
-            <p class="small text-muted mb-0">Based on actual operating conditions vs design parameters</p>
+            <div>
+                <div class="sensor-label">Efficiency Loss</div>
+                <div class="sensor-value">${foulingData.efficiency_loss?.toFixed(1) || '0.0'}%</div>
+            </div>
+        </div>
+        
+        <div class="row">
+            <div class="col-6">
+                <small class="text-muted">Current U Value</small>
+                <div class="fw-bold">${(foulingData.u_current || 0).toFixed(1)} W/m²·K</div>
+            </div>
+            <div class="col-6">
+                <small class="text-muted">Design U Value</small>
+                <div class="fw-bold text-success">${(foulingData.u_clean || 0).toFixed(1)} W/m²·K</div>
+            </div>
+        </div>
+        
+        <div class="row mt-2">
+            <div class="col-6">
+                <small class="text-muted">LMTD</small>
+                <div class="fw-bold">${(foulingData.lmtd_current || 0).toFixed(2)} K</div>
+            </div>
+            <div class="col-6">
+                <small class="text-muted">Performance Ratio</small>
+                <div class="fw-bold ${foulingData.performance_ratio > 0.9 ? 'text-success' : foulingData.performance_ratio > 0.8 ? 'text-warning' : 'text-danger'}">
+                    ${(foulingData.performance_ratio || 0).toFixed(3)}
+                </div>
+            </div>
+        </div>
+        
+        <div class="mt-2">
+            <small class="text-muted">Heat Transfer</small>
+            <div class="fw-bold">
+                ${(foulingData.heat_transfer_current || 0).toFixed(1)} kW / 
+                <span class="text-success">${DESIGN_PARAMS.heat_duty} kW</span>
+            </div>
         </div>
     `;
+    
+    statusDiv.innerHTML = statusHTML;
+    
+    // Update cleaning recommendation
+    if (foulingData.cleaning_recommendation) {
+        const rec = foulingData.cleaning_recommendation;
+        document.getElementById('cleaningTime').textContent = rec.recommendation;
+        document.getElementById('cleaningProgress').style.width = rec.progressPercent + '%';
+        document.getElementById('cleaningProgress').className = 'progress-bar bg-' + rec.urgency;
+    }
 }
 
-document.addEventListener("DOMContentLoaded", function () {
-    loadFoulingData();
-    loadCurrentSensorValues();
-    // Refresh sensor values every 30 seconds
-    setInterval(loadCurrentSensorValues, 30000);
-});
-
-function loadFoulingData() {
-    const chartMessage = document.getElementById('chartMessage');
-    chartMessage.textContent = "Loading fouling history...";
-
-    fetch(foulingHistoryUrl + "?points=50")
-        .then(response => {
-            if (!response.ok) throw new Error("HTTP " + response.status);
-            return response.json();
-        })
-        .then(payload => {
-            const data = payload.data || [];
-            if (!data.length) {
-                chartMessage.textContent = "Not enough data to compute fouling history yet.";
-                document.getElementById('historicalData').innerHTML =
-                    "<p class='text-muted'>No historical fouling records found.</p>";
-                return;
-            }
-
-            const labels = data.map(d => {
-                try {
-                    return new Date(d.timestamp).toLocaleString('en-IN', {
-                        timeZone: 'Asia/Kolkata',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                    });
-                } catch (e) {
-                    return d.timestamp;
-                }
-            });
-            const values = data.map(d => d.fouling_factor);
-
-            foulingChart.data.labels = labels;
-            foulingChart.data.datasets[0].data = values;
-            foulingChart.update();
-            chartMessage.textContent = `Showing ${data.length} data points`;
-
-            updateHistoricalDataTable(data);
-        })
-        .catch(err => {
-            console.error("Failed to load fouling history:", err);
-            chartMessage.textContent = "Failed to load fouling history.";
-        });
+function updateTDSParameters(foulingData) {
+    document.getElementById('saturationIndex').textContent = foulingData.saturation_index?.toFixed(2) || "--";
+    document.getElementById('scalingRate').textContent = (foulingData.scaling_rate || 0).toFixed(2) + " mg/m²·h";
+    document.getElementById('caco3Equiv').textContent = (foulingData.caco3_equivalent || 0).toFixed(0) + " ppm";
+    document.getElementById('phFactor').textContent = (foulingData.ph_impact || 1).toFixed(1);
 }
 
-function updateHistoricalDataTable(data) {
-    const historicalDiv = document.getElementById('historicalData');
+function updateCombinedAnalysis(foulingData) {
+    document.getElementById('current_thermal_fouling').textContent = 
+        foulingData.fouling_factor > 0 ? foulingData.fouling_factor.toExponential(4) : "0";
+    document.getElementById('current_tds_scaling').textContent = 
+        foulingData.tds_scaling_factor > 0 ? foulingData.tds_scaling_factor.toExponential(4) : "0";
+    document.getElementById('current_total_fouling').textContent = 
+        foulingData.total_fouling_factor > 0 ? foulingData.total_fouling_factor.toExponential(4) : "0";
+    
+    const combinedRec = document.getElementById('combinedRecommendation');
+    const overallEff = foulingData.overall_efficiency || 0;
+    
+    let recommendation = "";
+    if (overallEff > 95) {
+        recommendation = `<i class="fas fa-check-circle me-2"></i>Excellent performance (${overallEff.toFixed(1)}% efficiency)`;
+    } else if (overallEff > 85) {
+        recommendation = `<i class="fas fa-info-circle me-2"></i>Good performance (${overallEff.toFixed(1)}% efficiency) - Monitor TDS levels`;
+    } else if (overallEff > 75) {
+        recommendation = `<i class="fas fa-exclamation-triangle me-2"></i>Moderate performance loss (${overallEff.toFixed(1)}% efficiency) - Check for scaling`;
+    } else {
+        recommendation = `<i class="fas fa-exclamation-circle me-2"></i>Significant performance loss (${overallEff.toFixed(1)}% efficiency) - Immediate attention required`;
+    }
+    
+    combinedRec.innerHTML = recommendation;
+}
+
+// ========== HISTORICAL DATA LOADING ==========
+
+async function loadHistoricalFoulingData() {
+    try {
+        const response = await fetch(foulingHistoryUrl);
+        const data = await response.json();
+        
+        if (data.history && data.history.length > 0) {
+            updateCharts(data.history);
+            updateHistoricalTable(data.history);
+            updateCorrelationChart(data.history);
+        }
+    } catch (error) {
+        console.error("Error loading historical data:", error);
+    }
+}
+
+function updateCharts(history) {
+    const labels = history.map(item => new Date(item.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}));
+    
+    // Update thermal chart
+    thermalChart.data.labels = labels;
+    thermalChart.data.datasets[0].data = history.map(item => item.fouling_factor || 0);
+    thermalChart.update('none');
+    
+    // Update TDS chart (if TDS data is available)
+    const tdsData = history.filter(item => item.tds_value).slice(-24); // Last 24 readings
+    if (tdsData.length > 0) {
+        tdsChart.data.labels = tdsData.map(item => new Date(item.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}));
+        tdsChart.data.datasets[0].data = tdsData.map(item => item.tds_scaling_factor || 0);
+        tdsChart.update('none');
+        
+        document.getElementById('tdsChartMessage').textContent = 
+            `${tdsData.length} TDS readings analyzed`;
+    }
+    
+    // Update combined chart
+    combinedChart.data.labels = labels;
+    combinedChart.data.datasets[0].data = history.map(item => item.fouling_factor || 0);
+    combinedChart.data.datasets[1].data = history.map(item => item.tds_scaling_factor || 0);
+    combinedChart.data.datasets[2].data = history.map(item => item.total_fouling_factor || 0);
+    combinedChart.update('none');
+    
+    document.getElementById('thermalChartMessage').textContent = 
+        `${history.length} data points loaded | Last: ${labels[labels.length-1]}`;
+}
+
+function updateCorrelationChart(history) {
+    const correlationData = history.filter(item => item.tds_value && item.fouling_factor)
+                                   .map(item => ({
+                                       x: item.tds_value,
+                                       y: item.fouling_factor
+                                   }));
+    
+    if (correlationData.length > 0) {
+        correlationChart.data.datasets[0].data = correlationData;
+        correlationChart.update('none');
+        
+        // Calculate correlation coefficient
+        const n = correlationData.length;
+        const sumX = correlationData.reduce((sum, point) => sum + point.x, 0);
+        const sumY = correlationData.reduce((sum, point) => sum + point.y, 0);
+        const sumXY = correlationData.reduce((sum, point) => sum + point.x * point.y, 0);
+        const sumX2 = correlationData.reduce((sum, point) => sum + point.x * point.x, 0);
+        const sumY2 = correlationData.reduce((sum, point) => sum + point.y * point.y, 0);
+        
+        const correlation = (n * sumXY - sumX * sumY) / 
+                           Math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
+        
+        document.getElementById('correlationAnalysis').innerHTML = `
+            <div class="alert ${Math.abs(correlation) > 0.5 ? 'alert-warning' : 'alert-info'}">
+                <i class="fas fa-chart-line me-2"></i>
+                <strong>TDS-Fouling Correlation:</strong> ${correlation.toFixed(3)}
+                <br><small>
+                    ${Math.abs(correlation) > 0.7 ? 'Strong correlation' : 
+                      Math.abs(correlation) > 0.4 ? 'Moderate correlation' : 
+                      'Weak correlation'} between TDS levels and fouling rate.
+                </small>
+            </div>
+        `;
+    }
+}
+
+function updateHistoricalTable(history) {
+    const tableData = history.slice(-10).reverse(); // Last 10 readings
+    
     let tableHTML = `
         <div class="table-responsive">
-            <table class="table table-dark table-striped table-sm">
+            <table class="table table-dark table-hover">
                 <thead>
                     <tr>
-                        <th>Timestamp</th>
-                        <th>Fouling Factor</th>
-                        <th>U Actual</th>
-                        <th>Performance</th>
-                        <th>Severity</th>
+                        <th>Time</th>
+                        <th>Hot In/Out</th>
+                        <th>Cold In/Out</th>
+                        <th>TDS (ppm)</th>
+                        <th>Thermal Fouling</th>
+                        <th>TDS Scaling</th>
+                        <th>Total</th>
                     </tr>
                 </thead>
                 <tbody>
     `;
     
-    data.slice(-20).reverse().forEach(point => {
-        const ff = point.fouling_factor;
-        const perfPct = (point.performance_ratio * 100).toFixed(1);
-        const colorClass = getColorFromSeverity(point.severity);
-        
+    tableData.forEach(item => {
         tableHTML += `
             <tr>
-                <td>${point.timestamp}</td>
-                <td>${ff > 0 ? ff.toExponential(4) : '0'}</td>
-                <td>${point.u_actual ? point.u_actual.toFixed(0) : 'N/A'} W/m²·K</td>
-                <td>${perfPct}%</td>
-                <td><span class="badge bg-${colorClass}">${point.severity}</span></td>
-            </tr>`;
+                <td>${new Date(item.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
+                <td>${item.T1_in?.toFixed(1) || '--'}° / ${item.T1_out?.toFixed(1) || '--'}°</td>
+                <td>${item.T2_in?.toFixed(1) || '--'}° / ${item.T2_out?.toFixed(1) || '--'}°</td>
+                <td>
+                    <span class="badge ${item.tds_value > 350 ? 'bg-danger' : item.tds_value > 250 ? 'bg-warning' : 'bg-success'}">
+                        ${item.tds_value?.toFixed(0) || '--'}
+                    </span>
+                </td>
+                <td>${(item.fouling_factor || 0).toExponential(3)}</td>
+                <td>${(item.tds_scaling_factor || 0).toExponential(3)}</td>
+                <td class="${item.total_fouling_factor > 0.0005 ? 'text-danger fw-bold' : ''}">
+                    ${(item.total_fouling_factor || 0).toExponential(3)}
+                </td>
+            </tr>
+        `;
     });
     
-    tableHTML += `</tbody></table></div>`;
-    historicalDiv.innerHTML = tableHTML;
+    tableHTML += `
+                </tbody>
+            </table>
+        </div>
+        <small class="text-muted">Showing last ${tableData.length} readings. Full data available for export.</small>
+    `;
+    
+    document.getElementById('historicalData').innerHTML = tableHTML;
 }
 
-function getColorFromSeverity(severity) {
-    const colorMap = {
-        'No Fouling': 'success',
-        'Minor Fouling': 'info',
-        'Moderate Fouling': 'warning',
-        'Severe Fouling': 'danger',
-        'Critical Fouling': 'dark',
-        'Insufficient Data': 'secondary'
-    };
-    return colorMap[severity] || 'secondary';
-}
-
-function showFoulingInfo() {
-    alert(`Fouling Factor Calculation - ZEROLOSS SYSTEMS
-
-📊 CORRECT ENGINEERING APPROACH:
-
-Fouling Factor (Rf) = 1/U_actual - 1/U_clean
-
-Where:
-• U_actual = Q_actual / (A × LMTD_actual)
-• U_clean = Design/clean heat transfer coefficient
-• Q_actual = Actual heat transfer rate from sensor data
-• LMTD_actual = Log Mean Temperature Difference from actual operating conditions
-
-🔍 Key Points:
-• Uses ACTUAL operating conditions (from sensors)
-• Compares against DESIGN/clean conditions
-• Accounts for changing LMTD due to fouling
-• Proper parallel flow LMTD calculation
-
-💡 Why this matters:
-• Accurate fouling assessment
-• Proper maintenance scheduling
-• Energy efficiency monitoring
-• Equipment protection
-
-Powered by ZEROLOSS SYSTEMS`);
-}
+// ========== REPORT DOWNLOAD FUNCTIONS ==========
 
 function downloadFoulingCSV() {
-    const start = document.getElementById("reportStart").value;
-    const end = document.getElementById("reportEnd").value;
-    const params = new URLSearchParams();
-    if (start) params.append("start", start);
-    if (end) params.append("end", end);
-    const url = foulingReportCsvUrl + (params.toString() ? "?" + params.toString() : "");
-    window.open(url, "_blank");
+    const start = document.getElementById('reportStart').value;
+    const end = document.getElementById('reportEnd').value;
+    
+    let url = foulingReportCsvUrl;
+    if (start && end) {
+        url += `?start_date=${start}&end_date=${end}`;
+    }
+    
+    window.location.href = url;
+}
+
+function downloadTDSAnalysisCSV() {
+    const start = document.getElementById('reportStart').value;
+    const end = document.getElementById('reportEnd').value;
+    
+    let url = `/api/device/${deviceId}/tds-report-csv/`;
+    if (start && end) {
+        url += `?start_date=${start}&end_date=${end}`;
+    }
+    
+    window.location.href = url;
 }
 
 function downloadSensorCSV() {
-    const start = document.getElementById("reportStart").value;
-    const end = document.getElementById("reportEnd").value;
-    const params = new URLSearchParams();
-    if (start) params.append("start", start);
-    if (end) params.append("end", end);
-    const url = sensorReportCsvUrl + (params.toString() ? "?" + params.toString() : "");
-    window.open(url, "_blank");
+    const start = document.getElementById('reportStart').value;
+    const end = document.getElementById('reportEnd').value;
+    
+    let url = sensorReportCsvUrl;
+    if (start && end) {
+        url += `?start_date=${start}&end_date=${end}`;
+    }
+    
+    window.location.href = url;
 }
+
+// ========== HELPER FUNCTIONS ==========
+
+function showEnhancedFoulingInfo() {
+    const info = `
+        <strong>Enhanced Fouling Analysis (PL0719A-SS316-5T-EPDM-1P)</strong><br>
+        <small>
+            • <strong>Thermal Fouling:</strong> Calculated from temperature degradation only<br>
+            • <strong>TDS Scaling:</strong> Based on water quality and empirical caustic plant correlations<br>
+            • <strong>No Pressure Drop:</strong> Simplified calculation using LMTD method only<br>
+            • <strong>Design Parameters:</strong> From spec sheet (Heat Duty: ${DESIGN_PARAMS.heat_duty} kW, Area: ${DESIGN_PARAMS.heat_transfer_area} m²)<br>
+            • <strong>Critical Threshold:</strong> 0.001 m²·K/W (industry standard)
+        </small>
+    `;
+    
+    alert(info);
+}
+
+// ========== INITIALIZATION ==========
+
+// Load data on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadCurrentSensorValues();
+    loadHistoricalFoulingData();
+    
+    // Refresh data every 30 seconds
+    setInterval(loadCurrentSensorValues, 30000);
+    setInterval(loadHistoricalFoulingData, 60000);
+});
+
+// Set default dates for reports
+window.onload = function() {
+    const today = new Date().toISOString().split('T')[0];
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    const weekAgoStr = weekAgo.toISOString().split('T')[0];
+    
+    document.getElementById('reportStart').value = weekAgoStr;
+    document.getElementById('reportEnd').value = today;
+};
 </script>
 {% endblock %}

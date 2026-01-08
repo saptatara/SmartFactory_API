@@ -83,12 +83,14 @@ EMAIL = f"admin@{USERNAME}.local"
 COMPANY_NAME = "${RAW_CUSTOMER}"  # Use the original name with proper casing
 DEVICE_NAME = "${DEVICE_NAME}"
 
+# UPDATED SENSOR CONFIGURATIONS - ADDED TDS
 SENSOR_CONFIGS = [
     ("t1_in", "Temperature", "°C"),
     ("t1_out", "Temperature", "°C"), 
     ("t2_in", "Temperature", "°C"),
     ("t2_out", "Temperature", "°C"),
     ("dpt1", "Pressure", "bar"),
+    ("tds1", "TDS", "ppm"),  # NEW: Added TDS sensor
 ]
 
 User = get_user_model()
