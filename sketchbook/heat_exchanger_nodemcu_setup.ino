@@ -476,19 +476,17 @@ float readDPTSensor() {
 float readTDSSensor(float temperature) {
   // Select TDS channel
   selectADS1220Channel(CH_TDS);
-  delay(50); // Allow channel switching
+  delay(50);
   
-  // Take multiple readings for better accuracy
+  // Take multiple readings
   int32_t adcValue = 0;
   int validReadings = 0;
-  int maxAttempts = 5;
   
-  for (int i = 0; i < maxAttempts; i++) {
+  for (int i = 0; i < 5; i++) {
     int32_t reading = readADS1220();
     
-    // Check if reading is valid (not max/min value)
     if (reading != 0x7FFFFF && reading != 0x800000 && reading != 0) {
-      adcValue += abs(reading); // Use absolute value
+      adcValue += abs(reading);
       validReadings++;
     }
     delay(10);
@@ -503,55 +501,47 @@ float readTDSSensor(float temperature) {
   adcValue = adcValue / validReadings;
   
   // Convert ADC value to voltage (24-bit, 2.048V reference)
-  // Maximum ADC value for 2.048V is 8388607 (2^23 - 1)
   float voltage = (adcValue / 8388607.0) * 2.048;
   
   // Debug information
   Serial.print("📊 TDS ADC: " + String(adcValue) + " | ");
   Serial.print("⚡ Voltage: " + String(voltage, 4) + "V | ");
   
-  // Check if voltage is within reasonable range (0-2.048V)
-  if (voltage >= 0.0 && voltage <= 2.048) {
+  // CORRECTED CALCULATION BASED ON YOUR ACTUAL DATA
+  // Using linear interpolation:
+  // Point 1: 0.0243V = 0 ppm (AIR)
+  // Point 2: 2.3859V = 873 ppm (SALT WATER)
+  
+  // Calculate slope (ppm per volt)
+  float voltageRange = 2.3859 - 0.0243;
+  float ppmRange = 873.0 - 0.0;
+  float ppmPerVolt = ppmRange / voltageRange;
+  
+  // Calculate ppm
+  float tdsValue = (voltage - 0.0243) * ppmPerVolt;
+  
+  // Ensure non-negative
+  if (tdsValue < 0) tdsValue = 0;
+  
+  // Debug
+  Serial.print("📈 Raw TDS: " + String(tdsValue, 1) + " ppm | ");
+  
+  // Apply temperature compensation if valid
+  if (temperature >= 0.0 && temperature <= 100.0) {
+    // Standard compensation: 2% per °C from reference temperature (25°C)
+    float compensationFactor = 1.0 + tdsTemperatureCoefficient * (25.0 - temperature);
+    tdsValue = tdsValue * compensationFactor;
     
-    // SIMPLE LINEAR CALCULATION:
-    // voltage = 0V → 0 ppm
-    // voltage = 2.048V → 1000 ppm
-    float tdsValue = (voltage / 2.048) * 1000.0;
-    
-    // Debug the calculation
-    Serial.print("📈 Raw TDS: " + String(tdsValue, 1) + " ppm | ");
-    
-    // Apply temperature compensation if temperature is valid
-    if (temperature >= 0.0 && temperature <= 100.0) {
-      // Standard compensation: 2% per °C from reference temperature (25°C)
-      // TDS readings increase with temperature
-      float compensationFactor = 1.0 + tdsTemperatureCoefficient * (25.0 - temperature);
-      tdsValue = tdsValue * compensationFactor;
-      
-      Serial.print("🌡️ Compensated @ " + String(temperature, 1) + "°C: ");
-    }
-    
-    // Constrain to reasonable range (0-1100 ppm to allow for slight over-range)
-    tdsValue = constrain(tdsValue, 0.0, 1100.0);
-    
-    // Add sensor-specific corrections (if known)
-    // These values can be adjusted based on your specific sensor
-    if (tdsValue < 50) {
-      // For very low TDS, reduce noise
-      tdsValue = round(tdsValue / 5.0) * 5.0;
-    }
-    
-    Serial.println("💧 Final TDS: " + String(tdsValue, 1) + " ppm");
-    
-    // Quality warning
-    if (tdsValue > 900) {
-      Serial.println("⚠️  Warning: TDS reading very high (>900 ppm)");
-    } else if (tdsValue < 10) {
-      Serial.println("💧 Very pure water detected (<10 ppm)");
-    }
-    
-    return tdsValue;
+    Serial.print("🌡️ Compensated @ " + String(temperature, 1) + "°C: ");
   }
+  
+  // Constrain to reasonable range
+  tdsValue = constrain(tdsValue, 0.0, 1200.0);
+  
+  Serial.println("💧 Final TDS: " + String(tdsValue, 1) + " ppm");
+  
+  return tdsValue;
+}
   else if (voltage < 0.0 && voltage > -0.1) {
     // Slight negative offset (common in differential measurements)
     Serial.print("⚠️  Small negative offset detected (");
